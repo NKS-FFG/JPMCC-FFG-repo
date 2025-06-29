@@ -1,25 +1,21 @@
 {
-    'name': 'first module', 
-    'summary': 'First Odoo 18 module',
+    'name': 'Cluster Draft Products', 
+    'summary': 'Cluster Head Draft Product Image Screen',
     'description': '''
-        Testing Purpuses.
+        Cluster Head Draft Product Image Screen
     ''',
     'version': '18.0.1.0.0',
     'category': 'Website/Website',
     'license': 'LGPL-3', 
-    'author': 'Odooistic',
-    'website': 'http://www.odooistic.co.uk',
+    'author': 'JPMCC FFG',
+    'website': '',
     'depends': [
-        'base', 'website'
+        'base', 'website', 'website_sale'
     ],
     'data': [
         'security/ir.model.access.csv',
-        'views/first_module_views.xml',
-        'views/hello_world_template.xml',
-        'views/menu.xml',
+        'views/draft_products.xml'
     ],
-    
     'installable': True,
     'application': True,
-
 }

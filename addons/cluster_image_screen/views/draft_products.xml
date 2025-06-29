@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="first_order_tree_custom" model="ir.ui.view">
+        <field name="name">first.order.tree.custom</field>
+        <field name="model">cluster.draft.products</field>
+        <field name="priority">1</field>
+        <field name="arch" type="xml">
+            <list string="Sales Orders" sample="1">
+                
+                <field name="productName" />
+                <field name="description" />
+                <field name="productCategory" />
+                <field name="clusterHeadUserId" />
+                <field name="submit_status" />
+            </list>
+        </field>
+    </record>
+
+    <record id="view_custom_model_form" model="ir.ui.view">
+        <field name="name">cluster.draft.products.form</field>
+        <field name="model">cluster.draft.products</field>
+        <field name="type">form</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                <group>
+                    <group>
+                        <field name="productName" />
+                        <field name="description" />
+                        <field name="tentative_price" />
+                        <field name="covering_material" />
+                        <field name="dimensions" />
+                        
+                        <field name="other_comments" />
+                        <button name="action_approve_product"
+                            type="object"
+                            string="Submit To Review"
+                            class="btn-primary"
+                        />
+                    </group>
+                    <group>
+                        <field name="productCategory" />
+                        <field name="clusterHeadUserId" />
+                        <field name="image" widget="many2many_binary" options="{'no_create': True}" />
+                    </group>
+                     
+                    
+                </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_custom_model" model="ir.actions.act_window">
+        <field name="name">Cluster Head - Draft Products</field>
+        <field name="res_model">cluster.draft.products</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p>Create and manage your custom models here.</p>
+        </field>
+    </record>
+
+    <!-- Menu Item -->
+    <!-- <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="sale.sale_menu_root"
+        action="action_custom_model" sequence="10" /> -->
+        <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="website_sale.menu_catalog"
+        action="action_custom_model" sequence="10" />
+
+        <!-- Root Menu -->
+    <menuitem id="menu_custom_model_root" name="Custom Module" sequence="10"/>
+
+</odoo>
