@@ -14,6 +14,8 @@
     ],
     'data': [
         'security/ir.model.access.csv',
+        'security/security.xml',
+        'security/ir.rule.xml',
         'views/draft_products.xml'
     ],
     'installable': True,

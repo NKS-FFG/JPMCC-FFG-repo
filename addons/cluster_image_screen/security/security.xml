@@ -1,0 +1,9 @@
+<odoo>
+    <record id="cluster_head" model="res.groups">
+        <field name="name">Cluster Head</field>
+    </record>
+
+    <record id="cluster_reviewer" model="res.groups">
+        <field name="name">Cluster Reviewer</field>
+    </record>
+</odoo>

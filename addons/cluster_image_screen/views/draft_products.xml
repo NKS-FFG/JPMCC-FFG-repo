@@ -41,7 +41,9 @@
                     </group>
                     <group>
                         <field name="productCategory" />
-                        <field name="clusterHeadUserId" />
+                        <!-- <field name="clusterHeadUserId" /> -->
+                        <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
+                        <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head"/>
                         <field name="image" widget="many2many_binary" options="{'no_create': True}" />
                     </group>
                      

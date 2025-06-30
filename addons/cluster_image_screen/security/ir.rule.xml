@@ -1,0 +1,21 @@
+<odoo>
+    <data noupdate="1">
+    
+        <!-- Rule for Cluster Head: Only see own products -->
+        <record id="cluster_head_draft_product_rule" model="ir.rule">
+            <field name="name">Cluster Head Own Products Only</field>
+            <field name="model_id" ref="model_cluster_draft_products"/>
+            <field name="groups" eval="[(4, ref('cluster_image_screen.cluster_head'))]"/>
+            <field name="domain_force">[('clusterHeadUserId', '=', user.id)]</field>
+        </record>
+
+        <!-- Rule for Reviewer and Admin: See all -->
+        <record id="cluster_reviewer_draft_product_rule" model="ir.rule">
+            <field name="name">Cluster Reviewer and Super Admin Can See All</field>
+            <field name="model_id" ref="model_cluster_draft_products"/>
+            <field name="groups" eval="[(4, ref('cluster_image_screen.cluster_reviewer')), (4, ref('base.group_system'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field> <!-- Always true condition -->
+        </record>
+
+    </data>
+</odoo>
