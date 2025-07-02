@@ -24,32 +24,38 @@
         <field name="arch" type="xml">
             <form>
                 <sheet>
-                <group>
+    
                     <group>
-                        <field name="productName" />
-                        <field name="description" />
-                        <field name="tentative_price" />
-                        <field name="covering_material" />
-                        <field name="dimensions" />
+                        <group>
+                            <field name="submit_status" readonly="1"/>
+                            <field name="productName" readonly="form_readonly" />
+                            <field name="description" readonly="form_readonly" />
+                            <field name="tentative_price" readonly="form_readonly" />
+                            <field name="covering_material" readonly="form_readonly" />
+                            <field name="dimensions" readonly="form_readonly"/>
+                            
+                            <field name="other_comments" readonly="form_readonly"/>
+                            <button name="action_approve_product"
+                                type="object"
+                                string="Submit To Review"
+                                class="btn-primary"
+                            />
+                        </group>
+                        <group>
+                            <field name="productCategory" readonly="form_readonly" />
+                            <!-- <field name="clusterHeadUserId" /> -->
+                            <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
+                            <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head" />
+                            <field name="image" widget="many2many_binary" options="{'no_create': True}" readonly="form_readonly"/>
+                        </group>
                         
-                        <field name="other_comments" />
-                        <button name="action_approve_product"
-                            type="object"
-                            string="Submit To Review"
-                            class="btn-primary"
-                        />
+                        
                     </group>
-                    <group>
-                        <field name="productCategory" />
-                        <!-- <field name="clusterHeadUserId" /> -->
-                        <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
-                        <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head"/>
-                        <field name="image" widget="many2many_binary" options="{'no_create': True}" />
-                    </group>
-                     
-                    
-                </group>
+                
                 </sheet>
+                <!-- <div class="oe_chatter">
+                    <field name="message_ids" widget="mail_thread"/>
+                </div> -->
             </form>
         </field>
     </record>
