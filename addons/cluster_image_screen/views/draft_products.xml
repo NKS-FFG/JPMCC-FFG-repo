@@ -23,6 +23,30 @@
         <field name="type">form</field>
         <field name="arch" type="xml">
             <form>
+             <header>
+                <button name="action_approve_product"
+                        type="object"
+                        string="Submit To Review"
+                        class="btn-primary"
+                        invisible="is_submit_button_disabled"
+                />
+                <button name="convert_to_ecommerce_product"
+                        type="object"
+                        string="Approve Product"
+                        class="btn-primary"
+                        icon="fa-check"
+                        groups="cluster_image_screen.cluster_reviewer,base.group_system"
+                        invisible="is_approve_button_invisible"
+                />
+                <button name="reject_product"
+                        type="object"
+                        string="Reject Product"
+                        class="btn-primary"
+                        icon="fa-times"
+                        groups="cluster_image_screen.cluster_reviewer,base.group_system"
+                        invisible="is_approve_button_invisible"
+                />
+            </header>
                 <sheet>
     
                     <group>
@@ -34,12 +58,8 @@
                             <field name="covering_material" readonly="form_readonly" />
                             <field name="dimensions" readonly="form_readonly"/>
                             
-                            <field name="other_comments" readonly="form_readonly"/>
-                            <button name="action_approve_product"
-                                type="object"
-                                string="Submit To Review"
-                                class="btn-primary"
-                            />
+                            <field name="other_remarks" readonly="form_readonly"/>
+                            
                         </group>
                         <group>
                             <field name="productCategory" readonly="form_readonly" />

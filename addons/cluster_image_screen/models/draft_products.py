@@ -12,7 +12,7 @@ class ClusterDraftProducts(models.Model):
     productCategory = fields.Many2one('product.public.category', string='Product Category', required=True, tracking=True)
     covering_material = fields.Char(string='Covering Material', tracking=True)
     dimensions = fields.Char(string='Dimensions', tracking=True)
-    other_comments = fields.Text(string='Other Comments', tracking=True)
+    other_remarks = fields.Text(string='Other Remarks', tracking=True)
     tentative_price = fields.Float(string='Tentative Price', tracking=True)
 
     @api.model
@@ -56,9 +56,10 @@ class ClusterDraftProducts(models.Model):
 
             record.submit_status = 'submitted'
 
-    is_submit_button_disabled = fields.Boolean(
+    is_submit_button_disabled = fields.Boolean(compute='_compute_editability',default=False,
         store=False
     )
+    is_approve_button_invisible = fields.Boolean(compute='_compute_editability', store=False, default=True)
     form_readonly = fields.Boolean(compute='_compute_editability', store=False)
 
     @api.depends()
@@ -66,11 +67,73 @@ class ClusterDraftProducts(models.Model):
         for rec in self:
             rec.form_readonly = True
             rec.is_submit_button_disabled = True
+            rec.is_approve_button_invisible = True
             if rec.submit_status == 'draft':
                 rec.form_readonly = False
                 rec.is_submit_button_disabled = False
-            elif self.env.user.has_group('cluster_image_screen.cluster_head') :
+                rec.is_approve_button_invisible = True
+            elif rec.submit_status == 'approved' or rec.submit_status == 'rejected':
+                rec.is_approve_button_invisible = True
                 rec.form_readonly = True
-            elif self.env.user.has_group('cluster_image_screen.cluster_reviewer') or self.env.user.has_group('base.group_system')  :
+            elif self.env.user.has_group('cluster_image_screen.cluster_head'):
+                rec.form_readonly = True
+            elif self.env.user.has_group('cluster_image_screen.cluster_reviewer') or self.env.user.has_group('base.group_system') :
                 rec.form_readonly = False
-            print('is_submit_button_disabled::',rec.is_submit_button_disabled)
+                rec.is_approve_button_invisible = False
+    
+
+    def convert_to_ecommerce_product(self):
+        for draft in self:
+            if draft.submit_status != 'submitted':
+                raise ValidationError("Only approved draft products can be published to eCommerce.")
+
+            if not draft.image:
+                raise ValidationError("At least one image is required to publish the product.")
+
+            # Use the first image as the main product image
+            main_image = draft.image[0]
+
+            product_vals = {
+                'name': draft.productName,
+                'description_ecommerce': draft.description,
+                'website_published': True,
+                'public_categ_ids': [(6, 0, [draft.productCategory.id])],
+                'sale_ok': True,
+                'list_price': draft.tentative_price or 0.0,
+                'categ_id': self.env.ref('product.product_category_all').id,
+                'image_1920': main_image.datas,
+                'dimensions':draft.dimensions,
+                'other_remarks': draft.other_remarks,
+                'covering_material': draft.covering_material
+            }
+
+            product = self.env['product.template'].create(product_vals)
+
+            # Copy each image attachment
+            for image in draft.image[1:]:
+                self.env['product.image'].create({
+                    'product_tmpl_id': product.id,
+                    'name': image.name,
+                    'image_1920': image.datas,  # Assuming image is in image field of ir.attachment
+                })
+
+            # Optional: update status or mark draft as converted
+            draft.write({'submit_status': 'approved'})  # Add 'published' if needed
+    
+    def reject_product(self):
+        for record in self:
+            record.submit_status = 'rejected'
+            record.is_approve_button_invisible = False
+            record.form_readonly = True
+
+
+from odoo import models, fields
+
+class ProductTemplate(models.Model):
+    _inherit = 'product.template'
+
+    covering_material = fields.Char(string='Covering Material', tracking=True)
+    dimensions = fields.Char(string='Dimensions', tracking=True)
+    other_remarks = fields.Text(string='Other Remarks', tracking=True)
+
+

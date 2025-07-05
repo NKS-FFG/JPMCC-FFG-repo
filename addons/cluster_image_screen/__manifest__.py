@@ -10,13 +10,14 @@
     'author': 'JPMCC FFG',
     'website': '',
     'depends': [
-        'base', 'website', 'website_sale'
+        'base', 'website', 'website_sale', 'product'
     ],
     'data': [
         'security/ir.model.access.csv',
         'security/security.xml',
         'security/ir.rule.xml',
-        'views/draft_products.xml'
+        'views/draft_products.xml',
+        'views/product_template_view.xml'
     ],
     'installable': True,
     'application': True,
