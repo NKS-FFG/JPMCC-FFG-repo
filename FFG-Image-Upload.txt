@@ -1,0 +1,36 @@
+Add this in draft_products.xml
+
+                  <group>
+                        <field name="productCategory" />
+                        <!-- <field name="clusterHeadUserId" /> -->
+                        <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
+                        <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head"/>
+
+                        <field name="main_image" widget="image" class="oe_left" options="{'preview_image': 'main_image', 'size': [150, 150]}"
+                               style="display: block; margin: 1rem 0 1rem 1rem; float: left;" />
+                        <notebook>
+                         <page string="Product Images" name="product_images">
+                            <group>
+                                <field name="image_1" widget="image" options="{'preview_image': 'image_1', 'size': [200, 200]}"/>
+                                <field name="image_1_filename" invisible="1" />
+                                <field name="image_2" widget="image" options="{'preview_image': 'image_2', 'size': [200, 200]}"/>
+                                <field name="image_2_filename" invisible="1" />
+                                <field name="image_3" widget="image" options="{'preview_image': 'image_3', 'size': [200, 200]}"/>
+                                <field name="image_3_filename" invisible="1" />
+                            </group>
+                        </page>
+                        </notebook>
+                    </group>
+
+Add this in draft_products.py
+
+    image_1 = fields.Binary("Image 1", attachment=True)
+    image_1_filename = fields.Char("Image 1 Filename")
+
+    image_2 = fields.Binary("Image 2", attachment=True)
+    image_2_filename = fields.Char("Image 2 Filename")
+
+    image_3 = fields.Binary("Image 3", attachment=True)
+    image_3_filename = fields.Char("Image 3 Filename")
+
+    main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
