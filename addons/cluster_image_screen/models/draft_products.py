@@ -8,7 +8,30 @@ class ClusterDraftProducts(models.Model):
 
     productName = fields.Char(string='Draft Product Name', required=True, tracking=True)
     description = fields.Char(string='Description', tracking=True)
-    image = fields.Many2many('ir.attachment', string="Image", required=True, tracking=True)
+    # image = fields.Many2many('ir.attachment', string="Image", required=True, tracking=True)
+    image_1 = fields.Binary("Image 1", attachment=True)
+    image_1_filename = fields.Char("Image 1 Filename")
+
+    image_2 = fields.Binary("Image 2", attachment=True)
+    image_2_filename = fields.Char("Image 2 Filename")
+
+    image_3 = fields.Binary("Image 3", attachment=True)
+    image_3_filename = fields.Char("Image 3 Filename")
+
+    main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
+
+    @api.depends('image_1', 'image_2', 'image_3')
+    def _compute_main_image(self):
+        for product in self:
+            if product.image_1:
+                product.main_image = product.image_1
+            elif product.image_2:
+                product.main_image = product.image_2
+            elif product.image_3:
+                product.main_image = product.image_3
+            else:
+                product.main_image = False
+
     productCategory = fields.Many2one('product.public.category', string='Product Category', required=True, tracking=True)
     covering_material = fields.Char(string='Covering Material', tracking=True)
     dimensions = fields.Char(string='Dimensions', tracking=True)
@@ -87,11 +110,11 @@ class ClusterDraftProducts(models.Model):
             if draft.submit_status != 'submitted':
                 raise ValidationError("Only approved draft products can be published to eCommerce.")
 
-            if not draft.image:
+            if not draft.main_image:
                 raise ValidationError("At least one image is required to publish the product.")
 
             # Use the first image as the main product image
-            main_image = draft.image[0]
+            main_image1 = draft.main_image
 
             product_vals = {
                 'name': draft.productName,
@@ -101,7 +124,7 @@ class ClusterDraftProducts(models.Model):
                 'sale_ok': True,
                 'list_price': draft.tentative_price or 0.0,
                 'categ_id': self.env.ref('product.product_category_all').id,
-                'image_1920': main_image.datas,
+                'image_1920': main_image1,
                 'dimensions':draft.dimensions,
                 'other_remarks': draft.other_remarks,
                 'covering_material': draft.covering_material
@@ -110,11 +133,25 @@ class ClusterDraftProducts(models.Model):
             product = self.env['product.template'].create(product_vals)
 
             # Copy each image attachment
-            for image in draft.image[1:]:
+            # for image in draft.image[1:]:
+            #     self.env['product.image'].create({
+            #         'product_tmpl_id': product.id,
+            #         'name': image.name,
+            #         'image_1920': image.datas,  # Assuming image is in image field of ir.attachment
+            #     })
+
+            if draft.image_2 and draft.main_image != draft.image_2:
                 self.env['product.image'].create({
                     'product_tmpl_id': product.id,
-                    'name': image.name,
-                    'image_1920': image.datas,  # Assuming image is in image field of ir.attachment
+                    'name': draft.productName + ' - Image 2',
+                    'image_1920': draft.image_2,  # Assuming image is in image field of ir.attachment
+                })
+
+            if draft.image_3 and draft.main_image != draft.image_3:
+                self.env['product.image'].create({
+                    'product_tmpl_id': product.id,
+                    'name': draft.productName + ' - Image 3',
+                    'image_1920': draft.image_3,  # Assuming image is in image field of ir.attachment
                 })
 
             # Optional: update status or mark draft as converted
