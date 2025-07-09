@@ -34,3 +34,15 @@ Add this in draft_products.py
     image_3_filename = fields.Char("Image 3 Filename")
 
     main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
+
+    @api.depends('image_1', 'image_2', 'image_3')
+    def _compute_main_image(self):
+        for product in self:
+            if product.image_1:
+                product.main_image = product.image_1
+            elif product.image_2:
+                product.main_image = product.image_2
+            elif product.image_3:
+                product.main_image = product.image_3
+            else:
+                product.main_image = False
