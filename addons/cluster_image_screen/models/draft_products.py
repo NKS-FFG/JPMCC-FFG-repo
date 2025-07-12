@@ -1,5 +1,34 @@
 from odoo import fields, models, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
+import base64
+import requests
+
+class ClusterMatchResult(models.Model):
+    _name = 'cluster.match.result'
+    _description = 'Similarity Match Result'
+
+    cluster_product_id = fields.Many2one('cluster.draft.products', string="Draft Product", ondelete='cascade')
+    similarity = fields.Float(string="Similarity")
+    match_id = fields.Many2one('ir.attachment', string="Matched Image")
+    image_url = fields.Char(string="Image URL", compute='_compute_image_url')
+    filename = fields.Char(string="Match") 
+    image_display = fields.Html(string="Image Preview", compute='_compute_image_display')
+
+    @api.depends('match_id')
+    def _compute_image_url(self):
+        for record in self:
+            if record.match_id:
+                record.image_url = f'/web/content/{record.match_id.id}'
+            else:
+                record.image_url = ''
+
+    @api.depends('image_url')
+    def _compute_image_display(self):
+        for record in self:
+            if record.image_url:
+                record.image_display = f'<img src="{record.image_url}" alt="Product Image" style="max-width: 100px; max-height: 100px; border-radius: 5px;"/>'
+            else:
+                record.image_display = ''
 
 class ClusterDraftProducts(models.Model):
     _name = 'cluster.draft.products'
@@ -8,7 +37,45 @@ class ClusterDraftProducts(models.Model):
 
     productName = fields.Char(string='Draft Product Name', required=True, tracking=True)
     description = fields.Char(string='Description', tracking=True)
-    image = fields.Many2many('ir.attachment', string="Image", required=True, tracking=True)
+    # image_1 = fields.Binary("Image 1", attachment=True)
+    # image_1_filename = fields.Char("Image 1 Filename")
+
+    image = fields.Many2one('ir.attachment', string="Image Attachment")
+
+    image_preview = fields.Binary(
+        string="Image Preview", compute="_compute_image", store=False
+    )
+
+    @api.depends('image')
+    def _compute_image(self):
+        for record in self:
+            record.image_preview = record.image.datas if record.image else False
+
+    # image_2 = fields.Binary("Image 2", attachment=True)
+    # image_2_filename = fields.Char("Image 2 Filename")
+
+    # image_3 = fields.Binary("Image 3", attachment=True)
+    # image_3_filename = fields.Char("Image 3 Filename")
+
+    main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
+
+    cluster_product_id = fields.Many2one('cluster.draft.products', string="Product", ondelete='cascade')
+    match_ids = fields.One2many('cluster.match.result', 'cluster_product_id', string="Similarity Matches")
+
+
+    #@api.depends('image_1', 'image_2', 'image_3')
+    @api.depends('image')
+    def _compute_main_image(self):
+        for product in self:
+            if product.image:
+                product.main_image = product.image.datas
+            # elif product.image_2:
+            #     product.main_image = product.image_2
+            # elif product.image_3:
+            #     product.main_image = product.image_3
+            else:
+                product.main_image = False
+
     productCategory = fields.Many2one('product.public.category', string='Product Category', required=True, tracking=True)
     covering_material = fields.Char(string='Covering Material', tracking=True)
     dimensions = fields.Char(string='Dimensions', tracking=True)
@@ -87,11 +154,11 @@ class ClusterDraftProducts(models.Model):
             if draft.submit_status != 'submitted':
                 raise ValidationError("Only approved draft products can be published to eCommerce.")
 
-            if not draft.image:
+            if not draft.main_image:
                 raise ValidationError("At least one image is required to publish the product.")
 
             # Use the first image as the main product image
-            main_image = draft.image[0]
+            main_image1 = draft.main_image
 
             product_vals = {
                 'name': draft.productName,
@@ -101,7 +168,7 @@ class ClusterDraftProducts(models.Model):
                 'sale_ok': True,
                 'list_price': draft.tentative_price or 0.0,
                 'categ_id': self.env.ref('product.product_category_all').id,
-                'image_1920': main_image.datas,
+                'image_1920': main_image1,
                 'dimensions':draft.dimensions,
                 'other_remarks': draft.other_remarks,
                 'covering_material': draft.covering_material
@@ -110,12 +177,26 @@ class ClusterDraftProducts(models.Model):
             product = self.env['product.template'].create(product_vals)
 
             # Copy each image attachment
-            for image in draft.image[1:]:
-                self.env['product.image'].create({
-                    'product_tmpl_id': product.id,
-                    'name': image.name,
-                    'image_1920': image.datas,  # Assuming image is in image field of ir.attachment
-                })
+            # for image in draft.image[1:]:
+            #     self.env['product.image'].create({
+            #         'product_tmpl_id': product.id,
+            #         'name': image.name,
+            #         'image_1920': image.datas,  # Assuming image is in image field of ir.attachment
+            #     })
+
+            # if draft.image_2 and draft.main_image != draft.image_2:
+            #     self.env['product.image'].create({
+            #         'product_tmpl_id': product.id,
+            #         'name': draft.productName + ' - Image 2',
+            #         'image_1920': draft.image_2,  # Assuming image is in image field of ir.attachment
+            #     })
+
+            # if draft.image_3 and draft.main_image != draft.image_3:
+            #     self.env['product.image'].create({
+            #         'product_tmpl_id': product.id,
+            #         'name': draft.productName + ' - Image 3',
+            #         'image_1920': draft.image_3,  # Assuming image is in image field of ir.attachment
+            #     })
 
             # Optional: update status or mark draft as converted
             draft.write({'submit_status': 'approved'})  # Add 'published' if needed
@@ -126,8 +207,49 @@ class ClusterDraftProducts(models.Model):
             record.is_approve_button_invisible = False
             record.form_readonly = True
 
+    def compare_button(self):
+        for record in self:
+            if not record.image:
+                raise UserError("Please upload an image to compare.")
 
-from odoo import models, fields
+            # Send the first image only
+            attachment = record.image[0]
+            print("Attachment details:", attachment)
+            image_binary = base64.b64decode(attachment.datas)
+            files = {'image': (attachment.name, image_binary, attachment.mimetype)}
+
+            try:
+                response = requests.post('http://localhost:5001/compare', files=files)
+                response.raise_for_status()
+                data = response.json()
+
+                # Save the result in a text field
+                # result_lines = [f"Match: {m['filename']}, Similarity: {m['similarity']:.4f}, ID: {m['id']}" for m in data.get('top_matches', [])]
+                # record.similarity_result = '\n'.join(result_lines)
+
+                matches = []
+                for match in data.get('top_matches', []):
+                    matches.append((0, 0, {
+                        'filename': match['filename'],
+                        'similarity': match['similarity'],
+                        'match_id': match['id'],
+                    }))
+
+                record.match_ids = [(5, 0, 0)] + matches 
+                print("Comparison results:", matches)
+                print("record.match_ids:", record.match_ids)
+
+                for match in record.match_ids:
+                    print("Filename:", match.filename)
+                    print("Similarity:", match.similarity)
+                    print("Image URL:", match.image_url)
+                    print("Attachment ID:", match.match_id.id)
+
+            except Exception as e:
+                raise UserError(f"Error during comparison: {str(e)}")
+
+
+
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'

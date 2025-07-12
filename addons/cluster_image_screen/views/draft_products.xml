@@ -7,7 +7,7 @@
         <field name="priority">1</field>
         <field name="arch" type="xml">
             <list string="Sales Orders" sample="1">
-                
+
                 <field name="productName" />
                 <field name="description" />
                 <field name="productCategory" />
@@ -23,32 +23,13 @@
         <field name="type">form</field>
         <field name="arch" type="xml">
             <form>
-             <header>
-                <button name="action_approve_product"
-                        type="object"
-                        string="Submit To Review"
-                        class="btn-primary"
-                        invisible="is_submit_button_disabled"
-                />
-                <button name="convert_to_ecommerce_product"
-                        type="object"
-                        string="Approve Product"
-                        class="btn-primary"
-                        icon="fa-check"
-                        groups="cluster_image_screen.cluster_reviewer,base.group_system"
-                        invisible="is_approve_button_invisible"
-                />
-                <button name="reject_product"
-                        type="object"
-                        string="Reject Product"
-                        class="btn-primary"
-                        icon="fa-times"
-                        groups="cluster_image_screen.cluster_reviewer,base.group_system"
-                        invisible="is_approve_button_invisible"
-                />
-            </header>
+                <header>
+                    <button name="action_approve_product" type="object" string="Submit To Review" class="btn-primary" invisible="is_submit_button_disabled" />
+                    <button name="convert_to_ecommerce_product" type="object" string="Approve Product" class="btn-primary" icon="fa-check" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_approve_button_invisible" />
+                    <button name="reject_product" type="object" string="Reject Product" class="btn-primary" icon="fa-times" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_approve_button_invisible" />
+                </header>
                 <sheet>
-    
+
                     <group>
                         <group>
                             <field name="submit_status" readonly="1"/>
@@ -57,21 +38,54 @@
                             <field name="tentative_price" readonly="form_readonly" />
                             <field name="covering_material" readonly="form_readonly" />
                             <field name="dimensions" readonly="form_readonly"/>
-                            
+
                             <field name="other_remarks" readonly="form_readonly"/>
-                            
+                            <button name="compare_button" type="object" string="Compare" class="btn-primary"/>
+
                         </group>
                         <group>
                             <field name="productCategory" readonly="form_readonly" />
                             <!-- <field name="clusterHeadUserId" /> -->
                             <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
                             <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head" />
-                            <field name="image" widget="many2many_binary" options="{'no_create': True}" readonly="form_readonly"/>
+
+                            <!-- <field name="main_image" widget="image" class="oe_left" options="{'preview_image': 'main_image', 'size': [150, 150]}" style="display: block; margin: 1rem 0 1rem 1rem; float: left;" />
+                            <notebook>
+                                <page string="Product Images" name="product_images">
+
+                                    <group>
+                                        <field name="image_1" widget="image" options="{'preview_image': 'image_1', 'size': [200, 200]}"/>
+                                        <field name="image_1_filename" invisible="1"/>
+                                        <field name="image_2" widget="image" options="{'preview_image': 'image_2', 'size': [200, 200]}"/>
+                                        <field name="image_2_filename" invisible="1" />
+                                        <field name="image_3" widget="image" options="{'preview_image': 'image_3', 'size': [200, 200]}"/>
+                                        <field name="image_3_filename" invisible="1" />
+                                    </group>
+                                </page>
+                            </notebook> -->
+
+                            <field name="image" context="{'default_res_model': 'custom.attachment.image'}"/>
+                            <field name="image_preview" widget="image" readonly="1"/>
+
+                            <!-- <field name="image" widget="many2many_binary" options="{'no_create': True}" readonly="form_readonly"/> -->
                         </group>
-                        
-                        
+
+                        <!-- Similarity Results Tab -->
+                        <notebook>
+                            <page string="Similarity Matches">
+                                <field name="match_ids" nolabel="1" readonly="1">
+                                    <list delete="false">
+                                        <field name="similarity"/>
+                                        <field name="filename"/>
+                                        <field name="image_display" widget="html" string="Image Preview"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
+
+
                     </group>
-                
+
                 </sheet>
                 <!-- <div class="oe_chatter">
                     <field name="message_ids" widget="mail_thread"/>
@@ -91,12 +105,10 @@
     </record>
 
     <!-- Menu Item -->
-    <!-- <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="sale.sale_menu_root"
-        action="action_custom_model" sequence="10" /> -->
-        <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="website_sale.menu_catalog"
-        action="action_custom_model" sequence="10" />
+    <!-- <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="sale.sale_menu_root" action="action_custom_model" sequence="10" /> -->
+    <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="website_sale.menu_catalog" action="action_custom_model" sequence="10" />
 
-        <!-- Root Menu -->
+    <!-- Root Menu -->
     <menuitem id="menu_custom_model_root" name="Custom Module" sequence="10"/>
 
 </odoo>
