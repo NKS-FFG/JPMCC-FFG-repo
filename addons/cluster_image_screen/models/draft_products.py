@@ -127,6 +127,8 @@ class ClusterDraftProducts(models.Model):
         store=False
     )
     is_approve_button_invisible = fields.Boolean(compute='_compute_editability', store=False, default=True)
+    is_compare_button_invisible = fields.Boolean(compute='_compute_editability', store=False, default=True)
+    is_similarity_result_invisible = fields.Boolean(compute='_compute_editability', default=True, store=False)
     form_readonly = fields.Boolean(compute='_compute_editability', store=False)
 
     @api.depends()
@@ -135,6 +137,9 @@ class ClusterDraftProducts(models.Model):
             rec.form_readonly = True
             rec.is_submit_button_disabled = True
             rec.is_approve_button_invisible = True
+            rec.is_compare_button_invisible = True
+            rec.is_similarity_result_invisible = True
+
             if rec.submit_status == 'draft':
                 rec.form_readonly = False
                 rec.is_submit_button_disabled = False
@@ -147,7 +152,8 @@ class ClusterDraftProducts(models.Model):
             elif self.env.user.has_group('cluster_image_screen.cluster_reviewer') or self.env.user.has_group('base.group_system') :
                 rec.form_readonly = False
                 rec.is_approve_button_invisible = False
-    
+                rec.is_compare_button_invisible = False
+                rec.is_similarity_result_invisible = False
 
     def convert_to_ecommerce_product(self):
         for draft in self:
