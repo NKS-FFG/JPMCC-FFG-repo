@@ -40,7 +40,7 @@
                             <field name="dimensions" readonly="form_readonly"/>
 
                             <field name="other_remarks" readonly="form_readonly"/>
-                            <button name="compare_button" type="object" string="Compare" class="btn-primary"/>
+                            <button name="compare_button" type="object" string="Compare" class="btn-primary" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_compare_button_invisible"/>
 
                         </group>
                         <group>
@@ -72,7 +72,7 @@
 
                         <!-- Similarity Results Tab -->
                         <notebook>
-                            <page string="Similarity Matches">
+                            <page string="Similarity Matches" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_similarity_result_invisible">
                                 <field name="match_ids" nolabel="1" readonly="1">
                                     <list delete="false">
                                         <field name="similarity"/>
