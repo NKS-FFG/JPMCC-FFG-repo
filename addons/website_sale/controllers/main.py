@@ -2269,3 +2269,15 @@ class WebsiteSale(payment_portal.PaymentPortal):
             'currency_id': website.currency_id.id,
             'pricelist_id': website.pricelist_id.id,
         })
+        
+class WebsiteSaleNoPayment(WebsiteSale):
+
+    @route(['/shop/payment'], type='http', auth="public", website=True)
+    def payment(self, **post):
+        order = request.website.sale_get_order()
+        if not order:
+            return request.redirect("/shop")
+
+        # Immediately confirm order without payment
+        order.action_confirm()
+        return request.redirect('/shop/confirmation')
