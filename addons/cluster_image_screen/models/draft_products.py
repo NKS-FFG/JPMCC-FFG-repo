@@ -40,7 +40,7 @@ class ClusterDraftProducts(models.Model):
     # image_1 = fields.Binary("Image 1", attachment=True)
     # image_1_filename = fields.Char("Image 1 Filename")
 
-    image = fields.Many2one('ir.attachment', string="Image Attachment")
+    image = fields.Many2many('ir.attachment', string="Image Attachment")
 
     image_preview = fields.Binary(
         string="Image Preview", compute="_compute_image", store=False

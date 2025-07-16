@@ -64,7 +64,8 @@
                                 </page>
                             </notebook> -->
 
-                            <field name="image" context="{'default_res_model': 'custom.attachment.image'}"/>
+                            <field name="image" widget="many2many_binary" options="{'no_create': True}" readonly="form_readonly"/>
+                            <!-- <field name="image" context="{'default_res_model': 'custom.attachment.image'}"/> -->
                             <field name="image_preview" widget="image" readonly="1"/>
 
                             <!-- <field name="image" widget="many2many_binary" options="{'no_create': True}" readonly="form_readonly"/> -->
