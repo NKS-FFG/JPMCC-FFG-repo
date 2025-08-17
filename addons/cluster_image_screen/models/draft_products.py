@@ -37,44 +37,20 @@ class ClusterDraftProducts(models.Model):
 
     productName = fields.Char(string='Draft Product Name', required=True, tracking=True)
     description = fields.Char(string='Description', tracking=True)
-    # image_1 = fields.Binary("Image 1", attachment=True)
-    # image_1_filename = fields.Char("Image 1 Filename")
 
-    image = fields.Many2many('ir.attachment', string="Image Attachment")
-
-    image_preview = fields.Binary(
-        string="Image Preview", compute="_compute_image", store=False
+    product_template_image_ids = fields.One2many(
+        string="Product Images",
+        comodel_name='product.image',
+        inverse_name='draft_product_id',
+        copy=True,
+        required=True
     )
 
-    @api.depends('image')
-    def _compute_image(self):
-        for record in self:
-            record.image_preview = record.image.datas if record.image else False
 
-    # image_2 = fields.Binary("Image 2", attachment=True)
-    # image_2_filename = fields.Char("Image 2 Filename")
-
-    # image_3 = fields.Binary("Image 3", attachment=True)
-    # image_3_filename = fields.Char("Image 3 Filename")
-
-    main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
+    # main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
 
     cluster_product_id = fields.Many2one('cluster.draft.products', string="Product", ondelete='cascade')
     match_ids = fields.One2many('cluster.match.result', 'cluster_product_id', string="Similarity Matches")
-
-
-    #@api.depends('image_1', 'image_2', 'image_3')
-    @api.depends('image')
-    def _compute_main_image(self):
-        for product in self:
-            if product.image:
-                product.main_image = product.image.datas
-            # elif product.image_2:
-            #     product.main_image = product.image_2
-            # elif product.image_3:
-            #     product.main_image = product.image_3
-            else:
-                product.main_image = False
 
     productCategory = fields.Many2one('product.public.category', string='Product Category', required=True, tracking=True)
     covering_material = fields.Char(string='Covering Material', tracking=True)
@@ -116,6 +92,7 @@ class ClusterDraftProducts(models.Model):
                 ('productName', 'Product Name'),
                 ('productCategory', 'Product Category'),
                 ('clusterHeadUserId', 'Cluster Head'),
+                ('product_template_image_ids', 'Product Images')
             ]
             missing = [label for field, label in required_fields if not getattr(record, field)]
             if missing:
@@ -160,11 +137,11 @@ class ClusterDraftProducts(models.Model):
             if draft.submit_status != 'submitted':
                 raise ValidationError("Only approved draft products can be published to eCommerce.")
 
-            if not draft.main_image:
+            if not draft.product_template_image_ids:
                 raise ValidationError("At least one image is required to publish the product.")
 
             # Use the first image as the main product image
-            main_image1 = draft.main_image
+            main_image1 = draft.product_template_image_ids[0]
 
             product_vals = {
                 'name': draft.productName,
@@ -174,7 +151,7 @@ class ClusterDraftProducts(models.Model):
                 'sale_ok': True,
                 'list_price': draft.tentative_price or 0.0,
                 'categ_id': self.env.ref('product.product_category_all').id,
-                'image_1920': main_image1,
+                'image_1920': main_image1.image_1920,
                 'dimensions':draft.dimensions,
                 'other_remarks': draft.other_remarks,
                 'covering_material': draft.covering_material
@@ -182,28 +159,15 @@ class ClusterDraftProducts(models.Model):
 
             product = self.env['product.template'].create(product_vals)
 
-            # Copy each image attachment
-            # for image in draft.image[1:]:
-            #     self.env['product.image'].create({
-            #         'product_tmpl_id': product.id,
-            #         'name': image.name,
-            #         'image_1920': image.datas,  # Assuming image is in image field of ir.attachment
-            #     })
-
-            # if draft.image_2 and draft.main_image != draft.image_2:
-            #     self.env['product.image'].create({
-            #         'product_tmpl_id': product.id,
-            #         'name': draft.productName + ' - Image 2',
-            #         'image_1920': draft.image_2,  # Assuming image is in image field of ir.attachment
-            #     })
-
-            # if draft.image_3 and draft.main_image != draft.image_3:
-            #     self.env['product.image'].create({
-            #         'product_tmpl_id': product.id,
-            #         'name': draft.productName + ' - Image 3',
-            #         'image_1920': draft.image_3,  # Assuming image is in image field of ir.attachment
-            #     })
-
+            # main_image1.write({
+            #     'product_tmpl_id': product.id
+            # })
+             # Copy additional images (excluding the first one that's already set as main image)
+            for image in draft.product_template_image_ids[1:]:
+                image.write({
+                    'product_tmpl_id': product.id
+                })
+            
             # Optional: update status or mark draft as converted
             draft.write({'submit_status': 'approved'})  # Add 'published' if needed
     
@@ -255,7 +219,14 @@ class ClusterDraftProducts(models.Model):
                 raise UserError(f"Error during comparison: {str(e)}")
 
 
+class ProductImage(models.Model):
+    _inherit = 'product.image'
 
+    draft_product_id = fields.Many2one(
+        'cluster.draft.products',
+        string='Draft Product',
+        ondelete='cascade'
+    )
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
