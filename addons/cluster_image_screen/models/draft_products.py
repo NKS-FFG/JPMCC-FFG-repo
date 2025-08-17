@@ -42,8 +42,9 @@ class ClusterDraftProducts(models.Model):
 
     image = fields.Many2many('ir.attachment', string="Image Attachment")
 
-    image_preview = fields.Binary(
-        string="Image Preview", compute="_compute_image", store=False
+    # Updated to handle multiple images
+    image_preview = fields.Html(
+        string="Image Preview", compute="_compute_image_preview", store=False
     )
 
     @api.depends('image')
@@ -61,18 +62,45 @@ class ClusterDraftProducts(models.Model):
 
     cluster_product_id = fields.Many2one('cluster.draft.products', string="Product", ondelete='cascade')
     match_ids = fields.One2many('cluster.match.result', 'cluster_product_id', string="Similarity Matches")
+    
+    @api.onchange('image')
+    def _onchange_image(self):
+        """Force recomputation of image preview when images change"""
+        self._compute_image_preview()
+        self._compute_main_image()
+        
+    @api.depends('image', 'image.datas')
+    def _compute_image_preview(self):
+        for record in self:
+            if record.image:
+                # Create HTML for all images in a grid layout
+                html_images = []
+                for attachment in record.image:
+                    if attachment.datas:
+                        img_url = f'/web/content/{attachment.id}'
+                        html_images.append(
+                            f'<div style="display: inline-block; margin: 5px;">'
+                            f'<img src="{img_url}" alt="{attachment.name}" '
+                            f'style="max-width: 120px; max-height: 120px; border: 1px solid #ddd; '
+                            f'border-radius: 5px; object-fit: cover;"/>'
+                            f'<div style="text-align: center; font-size: 10px; margin-top: 2px;">'
+                            f'{attachment.name[:15]}{"..." if len(attachment.name) > 15 else ""}</div>'
+                            f'</div>'
+                        )
+                
+                if html_images:
+                    record.image_preview = f'<div style="text-align: left;">{"".join(html_images)}</div>'
+                else:
+                    record.image_preview = '<div style="color: #888;">No images uploaded</div>'
+            else:
+                record.image_preview = '<div style="color: #888;">No images uploaded</div>'
 
-
-    #@api.depends('image_1', 'image_2', 'image_3')
-    @api.depends('image')
+    @api.depends('image','image.datas')
     def _compute_main_image(self):
         for product in self:
             if product.image:
-                product.main_image = product.image.datas
-            # elif product.image_2:
-            #     product.main_image = product.image_2
-            # elif product.image_3:
-            #     product.main_image = product.image_3
+                # Use the first image as main image
+                product.main_image = product.image[0].datas
             else:
                 product.main_image = False
 
@@ -181,6 +209,14 @@ class ClusterDraftProducts(models.Model):
             }
 
             product = self.env['product.template'].create(product_vals)
+            # Create additional product images for remaining images
+            for i, attachment in enumerate(draft.image[1:], start=1):  # Skip first image as it's already main
+                if attachment.datas:
+                    self.env['product.image'].create({
+                        'product_tmpl_id': product.id,
+                        'name': f'{draft.productName} - Image {i+1}',
+                        'image_1920': attachment.datas,
+                    })
 
             # Copy each image attachment
             # for image in draft.image[1:]:
