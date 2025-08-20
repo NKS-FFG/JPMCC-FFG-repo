@@ -37,72 +37,43 @@ class ClusterDraftProducts(models.Model):
 
     productName = fields.Char(string='Draft Product Name', required=True, tracking=True)
     description = fields.Char(string='Description', tracking=True)
-    # image_1 = fields.Binary("Image 1", attachment=True)
-    # image_1_filename = fields.Char("Image 1 Filename")
 
-    image = fields.Many2many('ir.attachment', string="Image Attachment")
+    # Use Many2many for multiple image attachments
+    image = fields.Many2many('ir.attachment', string="Image Attachments")
 
     # Updated to handle multiple images
     image_preview = fields.Html(
         string="Image Preview", compute="_compute_image_preview", store=False
     )
 
+    # ✨ FIX 2: Update the compute method to build an HTML string of images
     @api.depends('image')
-    def _compute_image(self):
-        for record in self:
-            record.image_preview = record.image.datas if record.image else False
-
-    # image_2 = fields.Binary("Image 2", attachment=True)
-    # image_2_filename = fields.Char("Image 2 Filename")
-
-    # image_3 = fields.Binary("Image 3", attachment=True)
-    # image_3_filename = fields.Char("Image 3 Filename")
-
-    main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
-
-    cluster_product_id = fields.Many2one('cluster.draft.products', string="Product", ondelete='cascade')
-    match_ids = fields.One2many('cluster.match.result', 'cluster_product_id', string="Similarity Matches")
-    
-    @api.onchange('image')
-    def _onchange_image(self):
-        """Force recomputation of image preview when images change"""
-        self._compute_image_preview()
-        self._compute_main_image()
-        
-    @api.depends('image', 'image.datas')
     def _compute_image_preview(self):
         for record in self:
             if record.image:
-                # Create HTML for all images in a grid layout
-                html_images = []
-                for attachment in record.image:
-                    if attachment.datas:
-                        img_url = f'/web/content/{attachment.id}'
-                        html_images.append(
-                            f'<div style="display: inline-block; margin: 5px;">'
-                            f'<img src="{img_url}" alt="{attachment.name}" '
-                            f'style="max-width: 120px; max-height: 120px; border: 1px solid #ddd; '
-                            f'border-radius: 5px; object-fit: cover;"/>'
-                            f'<div style="text-align: center; font-size: 10px; margin-top: 2px;">'
-                            f'{attachment.name[:15]}{"..." if len(attachment.name) > 15 else ""}</div>'
-                            f'</div>'
-                        )
-                
-                if html_images:
-                    record.image_preview = f'<div style="text-align: left;">{"".join(html_images)}</div>'
-                else:
-                    record.image_preview = '<div style="color: #888;">No images uploaded</div>'
+                # Build an HTML string with all images
+                images_html = ''
+                for img in record.image:
+                    # Use /web/content/ for a direct URL to the attachment
+                    images_html += f'<img src="/web/content/{img.id}" style="max-height: 120px; max-width: 120px; margin: 5px; border-radius: 8px; border: 1px solid #ddd;" alt="{img.name}"/>'
+                record.image_preview = images_html
             else:
-                record.image_preview = '<div style="color: #888;">No images uploaded</div>'
+                record.image_preview = False
 
-    @api.depends('image','image.datas')
+    main_image = fields.Binary("Main Image", compute='_compute_main_image', store=True)
+
+    # ✨ FIX 3: Correct the main_image compute method to avoid the singleton error
+    @api.depends('image')
     def _compute_main_image(self):
         for product in self:
             if product.image:
-                # Use the first image as main image
+                # Explicitly take the data from the FIRST image in the recordset
                 product.main_image = product.image[0].datas
             else:
                 product.main_image = False
+
+    cluster_product_id = fields.Many2one('cluster.draft.products', string="Product", ondelete='cascade')
+    match_ids = fields.One2many('cluster.match.result', 'cluster_product_id', string="Similarity Matches")
 
     productCategory = fields.Many2one('product.public.category', string='Product Category', required=True, tracking=True)
     covering_material = fields.Char(string='Covering Material', tracking=True)
@@ -119,7 +90,7 @@ class ClusterDraftProducts(models.Model):
     
     @api.model
     def _get_cluster_head_domain(self):
-        cluster_head_group = self.env.ref('cluster_image_screen.cluster_head') # IMP: Assuming 'cluster_image_screen.cluster_head' is the XML ID of the cluster head group
+        cluster_head_group = self.env.ref('cluster_image_screen.cluster_head')
         return [('groups_id', 'in', [cluster_head_group.id])]
     
     clusterHeadUserId = fields.Many2one('res.users', 
@@ -135,6 +106,7 @@ class ClusterDraftProducts(models.Model):
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
     ], string='Submit Status', default='draft', tracking=True)
+    
     def action_approve_product(self):
         for record in self:
             if record.submit_status != 'draft':
@@ -159,40 +131,38 @@ class ClusterDraftProducts(models.Model):
     is_similarity_result_invisible = fields.Boolean(compute='_compute_editability', default=True, store=False)
     form_readonly = fields.Boolean(compute='_compute_editability', store=False)
 
-    @api.depends()
+    @api.depends('submit_status') # Added dependency for better reactivity
     def _compute_editability(self):
         for rec in self:
-            rec.form_readonly = True
-            rec.is_submit_button_disabled = True
-            rec.is_approve_button_invisible = True
-            rec.is_compare_button_invisible = True
-            rec.is_similarity_result_invisible = True
+            is_reviewer = self.env.user.has_group('cluster_image_screen.cluster_reviewer') or self.env.user.has_group('base.group_system')
+            is_head = self.env.user.has_group('cluster_image_screen.cluster_head')
 
             if rec.submit_status == 'draft':
                 rec.form_readonly = False
                 rec.is_submit_button_disabled = False
                 rec.is_approve_button_invisible = True
-            elif rec.submit_status == 'approved' or rec.submit_status == 'rejected':
+                rec.is_compare_button_invisible = True
+                rec.is_similarity_result_invisible = True
+            elif rec.submit_status == 'submitted':
+                rec.form_readonly = not is_reviewer
+                rec.is_submit_button_disabled = True
+                rec.is_approve_button_invisible = not is_reviewer
+                rec.is_compare_button_invisible = not is_reviewer
+                rec.is_similarity_result_invisible = not is_reviewer
+            else: # approved or rejected
+                rec.form_readonly = True
+                rec.is_submit_button_disabled = True
                 rec.is_approve_button_invisible = True
-                rec.form_readonly = True
-            elif self.env.user.has_group('cluster_image_screen.cluster_head'):
-                rec.form_readonly = True
-            elif self.env.user.has_group('cluster_image_screen.cluster_reviewer') or self.env.user.has_group('base.group_system') :
-                rec.form_readonly = False
-                rec.is_approve_button_invisible = False
-                rec.is_compare_button_invisible = False
-                rec.is_similarity_result_invisible = False
+                rec.is_compare_button_invisible = True
+                rec.is_similarity_result_invisible = is_reviewer # Reviewers can still see results
 
     def convert_to_ecommerce_product(self):
         for draft in self:
             if draft.submit_status != 'submitted':
-                raise ValidationError("Only approved draft products can be published to eCommerce.")
+                raise ValidationError("Only submitted draft products can be published to eCommerce.")
 
             if not draft.main_image:
-                raise ValidationError("At least one image is required to publish the product.")
-
-            # Use the first image as the main product image
-            main_image1 = draft.main_image
+                raise ValidationError("A main image is required to publish the product.")
 
             product_vals = {
                 'name': draft.productName,
@@ -202,52 +172,28 @@ class ClusterDraftProducts(models.Model):
                 'sale_ok': True,
                 'list_price': draft.tentative_price or 0.0,
                 'categ_id': self.env.ref('product.product_category_all').id,
-                'image_1920': main_image1,
-                'dimensions':draft.dimensions,
+                'image_1920': draft.main_image,
+                'dimensions': draft.dimensions,
                 'other_remarks': draft.other_remarks,
                 'covering_material': draft.covering_material
             }
 
             product = self.env['product.template'].create(product_vals)
-            # Create additional product images for remaining images
-            for i, attachment in enumerate(draft.image[1:], start=1):  # Skip first image as it's already main
-                if attachment.datas:
-                    self.env['product.image'].create({
-                        'product_tmpl_id': product.id,
-                        'name': f'{draft.productName} - Image {i+1}',
-                        'image_1920': attachment.datas,
-                    })
 
-            # Copy each image attachment
-            # for image in draft.image[1:]:
-            #     self.env['product.image'].create({
-            #         'product_tmpl_id': product.id,
-            #         'name': image.name,
-            #         'image_1920': image.datas,  # Assuming image is in image field of ir.attachment
-            #     })
+            # Create product.image records for the other images
+            # Starts from the second image (index 1)
+            for image_attachment in draft.image[1:]:
+                self.env['product.image'].create({
+                    'product_tmpl_id': product.id,
+                    'name': image_attachment.name,
+                    'image_1920': image_attachment.datas,
+                })
 
-            # if draft.image_2 and draft.main_image != draft.image_2:
-            #     self.env['product.image'].create({
-            #         'product_tmpl_id': product.id,
-            #         'name': draft.productName + ' - Image 2',
-            #         'image_1920': draft.image_2,  # Assuming image is in image field of ir.attachment
-            #     })
-
-            # if draft.image_3 and draft.main_image != draft.image_3:
-            #     self.env['product.image'].create({
-            #         'product_tmpl_id': product.id,
-            #         'name': draft.productName + ' - Image 3',
-            #         'image_1920': draft.image_3,  # Assuming image is in image field of ir.attachment
-            #     })
-
-            # Optional: update status or mark draft as converted
-            draft.write({'submit_status': 'approved'})  # Add 'published' if needed
+            draft.write({'submit_status': 'approved'})
     
     def reject_product(self):
         for record in self:
             record.submit_status = 'rejected'
-            record.is_approve_button_invisible = False
-            record.form_readonly = True
 
     def compare_button(self):
         for record in self:
@@ -256,7 +202,6 @@ class ClusterDraftProducts(models.Model):
 
             # Send the first image only
             attachment = record.image[0]
-            print("Attachment details:", attachment)
             image_binary = base64.b64decode(attachment.datas)
             files = {'image': (attachment.name, image_binary, attachment.mimetype)}
 
@@ -264,40 +209,84 @@ class ClusterDraftProducts(models.Model):
                 response = requests.post('http://localhost:5001/compare', files=files)
                 response.raise_for_status()
                 data = response.json()
-
-                # Save the result in a text field
-                # result_lines = [f"Match: {m['filename']}, Similarity: {m['similarity']:.4f}, ID: {m['id']}" for m in data.get('top_matches', [])]
-                # record.similarity_result = '\n'.join(result_lines)
-
-                matches = []
+                
+                # Use the 'Command' structure for managing one2many and many2many fields
+                # Command.clear() or (5, 0, 0) - Deletes all existing records
+                # Command.create() or (0, 0, {values}) - Creates a new record
+                matches_to_create = []
                 for match in data.get('top_matches', []):
-                    matches.append((0, 0, {
+                    matches_to_create.append((0, 0, {
                         'filename': match['filename'],
                         'similarity': match['similarity'],
                         'match_id': match['id'],
                     }))
 
-                record.match_ids = [(5, 0, 0)] + matches 
-                print("Comparison results:", matches)
-                print("record.match_ids:", record.match_ids)
+                # # This replaces all existing match_ids with the new ones
+                record.match_ids = [(5, 0, 0)] + matches_to_create
 
-                for match in record.match_ids:
-                    print("Filename:", match.filename)
-                    print("Similarity:", match.similarity)
-                    print("Image URL:", match.image_url)
-                    print("Attachment ID:", match.match_id.id)
-
+            except requests.exceptions.RequestException as e:
+                raise UserError(f"Network error during comparison: {str(e)}")
             except Exception as e:
-                raise UserError(f"Error during comparison: {str(e)}")
+                raise UserError(f"An unexpected error occurred: {str(e)}")
+
+    def compare_button_modified(self):
+        """
+        Sends multiple images to the comparison API and processes the results.
+        """
+        for record in self:
+            if not record.image:
+                raise UserError("Please upload at least one image to compare.")
+
+            # 1. Prepare a list of files for the multipart request.
+            # The API expects the files under a key named 'images'.
+            files_to_send = []
+            for attachment in record.image:
+                image_binary = base64.b64decode(attachment.datas)
+                # Each file is a tuple: ('field_name', (filename, file_data, content_type))
+                files_to_send.append(
+                    ('images', (attachment.name, image_binary, attachment.mimetype))
+                )
+
+            try:
+                # 2. Call the new API endpoint for multiple images.
+                api_url = 'http://localhost:5001/compare/multiple'
+                response = requests.post(api_url, files=files_to_send)
+                response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+                
+                data = response.json()
+                print("data: ", data)
+                matches_to_create = []
+
+                for match in data.get('top_matches', []):
+                    filename = match.get('filename')
+                    similarity_score = match.get('combined_score') 
+                    match_id = match.get('id')
+
+                    # Check if any of the essential values are missing
+                    if not all([filename, similarity_score is not None, match_id]):
+                        print(f"Skipping incomplete match result: {match}")
+                        continue
+
+                    matches_to_create.append((0, 0, {
+                        'filename': filename,
+                        'similarity': similarity_score,
+                        'match_id': match_id,
+                    }))
+
+                record.match_ids = [(5, 0, 0)] + matches_to_create
+
+            except requests.exceptions.RequestException as e:
+                # Handle network-related errors
+                raise UserError(f"Network error during comparison: {str(e)}")
+            except Exception as e:
+                # Handle other potential errors (e.g., JSON decoding)
+                raise UserError(f"An unexpected error occurred: {str(e)}")
 
 
-
-
+# ... (ProductTemplate class remains the same) ...
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
     covering_material = fields.Char(string='Covering Material', tracking=True)
     dimensions = fields.Char(string='Dimensions', tracking=True)
     other_remarks = fields.Text(string='Other Remarks', tracking=True)
-
-
