@@ -51,7 +51,8 @@
                                 name="product_template_image_ids"
                                 mode="kanban"
                                 add-label="Add Media"
-                                widget="x2_many_media_viewer"                        
+                                widget="x2_many_media_viewer" 
+                                readonly="form_readonly"                       
                             />
                         </group>
 
