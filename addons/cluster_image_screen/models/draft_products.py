@@ -2,6 +2,7 @@ from odoo import fields, models, api, _
 from odoo.exceptions import ValidationError, UserError
 import base64
 import requests
+from ..comparison.app import compare_multiple_images
 
 class ClusterMatchResult(models.Model):
     _name = 'cluster.match.result'
@@ -281,7 +282,6 @@ class ClusterDraftProducts(models.Model):
             except Exception as e:
                 # Handle other potential errors (e.g., JSON decoding)
                 raise UserError(f"An unexpected error occurred: {str(e)}")
-
 
 # ... (ProductTemplate class remains the same) ...
 class ProductTemplate(models.Model):
