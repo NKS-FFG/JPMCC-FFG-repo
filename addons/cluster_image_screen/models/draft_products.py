@@ -235,37 +235,35 @@ class ClusterDraftProducts(models.Model):
             temp_files = []
             try:
                 for product_image in record.product_template_image_ids:
+                    print(f"Product image: ", product_image)
                     if not product_image.image_1920:
                         continue
-                        
+
                     image_binary = base64.b64decode(product_image.image_1920)
                     img_io = io.BytesIO(image_binary)
 
+                    temp_file = None  # Initialize temp_file to None
                     try:
                         image = Image.open(img_io)
-                        
+
                         # Convert the image to RGB mode before saving as JPEG
                         if image.mode in ('RGBA', 'LA'):
                             image = image.convert('RGB')
 
                         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpeg')
-                        
+
                         # Save the converted image as a JPEG
                         image.save(temp_file.name, 'JPEG', quality=90)
                         temp_file.close()
-                        
+
                         temp_files.append(temp_file.name)
 
-                        
                     except Exception as img_error:
                         print(f"Failed to process image: {img_error}")
-                        temp_file.close()
-                        os.remove(temp_file.name)
+                        if temp_file is not None:  # Check if temp_file was initialized
+                            temp_file.close()
+                            os.remove(temp_file.name)
                         continue
-                    
-                    temp_file.close()
-                    
-                    temp_files.append(temp_file.name)
 
                 # 2. Call the compare_multiple_images function directly
                 result = compare_multiple_images(
@@ -274,7 +272,7 @@ class ClusterDraftProducts(models.Model):
                     frequency_weight=0.4,
                     similarity_weight=0.6
                 )
-                
+
                 print("result: ", result)
 
                 # 3. Check if the function returned an error
@@ -285,7 +283,7 @@ class ClusterDraftProducts(models.Model):
                 matches_to_create = []
                 for match in result.get('top_matches', []):
                     filename = match.get('filename')
-                    similarity_score = match.get('combined_score') 
+                    similarity_score = match.get('combined_score')
                     match_id = match.get('id')
 
                     # Check if any of the essential values are missing
@@ -314,7 +312,7 @@ class ClusterDraftProducts(models.Model):
                         try:
                             os.remove(temp_path)
                         except Exception as e:
-                            print(f"Failed to remove temp file {temp_path}: {str(e)}")                           
+                            print(f"Failed to remove temp file {temp_path}: {str(e)}")
 class ProductImage(models.Model):
     _inherit = 'product.image'
 
