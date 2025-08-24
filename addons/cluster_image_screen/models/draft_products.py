@@ -1,7 +1,11 @@
 from odoo import fields, models, api, _
 from odoo.exceptions import ValidationError, UserError
 import base64
-import requests
+from ..comparison.app import compare_multiple_images
+import tempfile
+import os
+import io
+from PIL import Image
 
 class ClusterMatchResult(models.Model):
     _name = 'cluster.match.result'
@@ -189,7 +193,7 @@ class ClusterDraftProducts(models.Model):
             files = {'image': (attachment.name, image_binary, attachment.mimetype)}
 
             try:
-                response = requests.post('http://localhost:5001/compare', files=files)
+                response = compare_multiple_images(files)
                 response.raise_for_status()
                 data = response.json()
 
@@ -219,6 +223,98 @@ class ClusterDraftProducts(models.Model):
                 raise UserError(f"Error during comparison: {str(e)}")
 
 
+    def compare_button_modified(self):
+        """
+        Processes multiple images using the compare_multiple_images function.
+        """
+        for record in self:
+            if not record.product_template_image_ids:
+                raise UserError("Please upload at least one image to compare.")
+
+            # 1. Prepare a list of temporary files from the uploaded images
+            temp_files = []
+            try:
+                for product_image in record.product_template_image_ids:
+                    if not product_image.image_1920:
+                        continue
+                        
+                    image_binary = base64.b64decode(product_image.image_1920)
+                    img_io = io.BytesIO(image_binary)
+
+                    try:
+                        image = Image.open(img_io)
+                        
+                        # Convert the image to RGB mode before saving as JPEG
+                        if image.mode in ('RGBA', 'LA'):
+                            image = image.convert('RGB')
+
+                        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpeg')
+                        
+                        # Save the converted image as a JPEG
+                        image.save(temp_file.name, 'JPEG', quality=90)
+                        temp_file.close()
+                        
+                        temp_files.append(temp_file.name)
+
+                        
+                    except Exception as img_error:
+                        print(f"Failed to process image: {img_error}")
+                        temp_file.close()
+                        os.remove(temp_file.name)
+                        continue
+                    
+                    temp_file.close()
+                    
+                    temp_files.append(temp_file.name)
+
+                # 2. Call the compare_multiple_images function directly
+                result = compare_multiple_images(
+                    uploaded_files=temp_files,
+                    top_k=3,  # You can make this configurable if needed
+                    frequency_weight=0.4,
+                    similarity_weight=0.6
+                )
+                
+                print("result: ", result)
+
+                # 3. Check if the function returned an error
+                if 'error' in result:
+                    raise UserError(f"Comparison failed: {result['error']}")
+
+                # 4. Process the successful results
+                matches_to_create = []
+                for match in result.get('top_matches', []):
+                    filename = match.get('filename')
+                    similarity_score = match.get('combined_score') 
+                    match_id = match.get('id')
+
+                    # Check if any of the essential values are missing
+                    if not all([filename, similarity_score is not None, match_id]):
+                        print(f"Skipping incomplete match result: {match}")
+                        continue
+
+                    matches_to_create.append((0, 0, {
+                        'filename': filename,
+                        'similarity': similarity_score,
+                        'match_id': match_id,
+                    }))
+
+                record.match_ids = [(5, 0, 0)] + matches_to_create
+
+            except UserError:
+                # Re-raise UserError as is
+                raise
+            except Exception as e:
+                # Handle other potential errors
+                raise UserError(f"An unexpected error occurred: {str(e)}")
+            finally:
+                # Clean up temporary files
+                for temp_path in temp_files:
+                    if os.path.exists(temp_path):
+                        try:
+                            os.remove(temp_path)
+                        except Exception as e:
+                            print(f"Failed to remove temp file {temp_path}: {str(e)}")                           
 class ProductImage(models.Model):
     _inherit = 'product.image'
 

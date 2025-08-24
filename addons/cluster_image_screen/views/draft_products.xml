@@ -40,19 +40,14 @@
                             <field name="dimensions" readonly="form_readonly"/>
 
                             <field name="other_remarks" readonly="form_readonly"/>
-                            <button name="compare_button" type="object" string="Compare" class="btn-primary" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_compare_button_invisible"/>
+                            <button name="compare_button_modified" type="object" string="Compare" class="btn-primary" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_compare_button_invisible"/>
 
                         </group>
                         <group>
                             <field name="productCategory" readonly="form_readonly" />
                             <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
                             <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head" />
-                            <field
-                                name="product_template_image_ids"
-                                mode="kanban"
-                                add-label="Add Media"
-                                widget="x2_many_media_viewer"                        
-                            />
+                            <field name="product_template_image_ids" mode="kanban" add-label="Add Media" widget="x2_many_media_viewer" />
                         </group>
 
                         <!-- Similarity Results Tab -->
