@@ -1,6 +1,10 @@
 from .matcher import get_image_paths_from_db, find_top_matches_improved
 import os
 from collections import defaultdict
+from PIL import Image
+from io import BytesIO
+import io
+import base64
 import tempfile
 
 def calculate_combined_score(product_matches, total_images, frequency_weight=0.4, similarity_weight=0.6):
@@ -112,45 +116,61 @@ def find_best_matches_multiple_images(uploaded_images_paths, comparison_paths, t
     
     return final_results[:top_k]
 
+
 #@app.route('/compare', methods=['POST'])
-# def compare_images(files):
-#     """Handle single image comparison (backward compatibility)"""
-#     if 'image' not in files:
-#         return jsonify({'error': 'No image uploaded'}), 400
+def compare_images(files):
+    """Handle single image comparison (backward compatibility)"""
+    if 'image' not in files:
+        return {'error': 'No image uploaded'}
 
-#     uploaded_image = files['image']
-#     print(f"Received single image: {uploaded_image.filename}")
-    
-#     # Create temporary file
-#     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-#     uploaded_path = temp_file.name
-#     temp_file.close()
+    uploaded_image = files['image']
+    filename = uploaded_image[0]
+    image_binary = uploaded_image[1]
+    print("image bin:", image_binary[:50])
 
-#     try:
-#         # Save the uploaded image
-#         uploaded_image.save(uploaded_path)
 
-#         # Get comparison images from PostgreSQL
-#         comparison_paths = get_image_paths_from_db()
+    temp_dir = 'temp'
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+        print(f"Created directory: {os.path.abspath(temp_dir)}") 
 
-#         if not comparison_paths:
-#             return {'error': 'No images found in database for comparison.'}
+    uploaded_path = os.path.join(temp_dir, filename)
 
-#         # Call original matcher for single image
-#         top_matches = find_top_matches_improved(uploaded_path, comparison_paths)
+    try:
+        image_stream = BytesIO(image_binary)
 
-#         return {
-#             'top_matches': top_matches,
-#             'total_uploaded_images': 1
-#         }
+        # Open the image using Pillow
+        img = Image.open(image_stream)
+        print(f"Opened image: {filename}, format: {img.format}, size: {img.size}, mode: {img.mode}")
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        # Save the image as a JPG
+        # The 'JPEG' argument specifies the format, and 'uploaded_path' is the file path.
+        print(f"Opened image new: {filename}, format: {img.format}, size: {img.size}, mode: {img.mode}")
+        img.save(uploaded_path, "JPEG")
+            
+        # Get comparison images from PostgreSQL
+        comparison_paths = get_image_paths_from_db()
 
-#     except Exception as e:
-#         return {'error': str(e)}
+        if not comparison_paths:
+            return {'error': 'No images found in database for comparison.'}
 
-#     finally:
-#         # Clean up
-#         if os.path.exists(uploaded_path):
-#             os.remove(uploaded_path)
+        # Call original matcher for single image
+        top_matches = find_top_matches_improved(uploaded_path, comparison_paths)
+
+        return {
+            'top_matches': top_matches,
+            'total_uploaded_images': 1
+        }
+
+    except Exception as e:
+        return {'error': str(e)}
+
+    finally:
+        pass
+        # Clean up
+        if os.path.exists(uploaded_path):
+            os.remove(uploaded_path)
 
 #@app.route('/compare/multiple', methods=['POST'])
 def compare_multiple_images(uploaded_files, top_k=3, frequency_weight=0.4, similarity_weight=0.6):  
@@ -177,35 +197,38 @@ def compare_multiple_images(uploaded_files, top_k=3, frequency_weight=0.4, simil
         return {'error': 'Frequency and similarity weights must sum to 1.0'}
     
     uploaded_paths = []
-    temp_files = []
-    
+
     try:
         # Process all uploaded images
         for idx, uploaded_file in enumerate(uploaded_files):
-            # Handle different input types (file objects vs file paths)
-            if hasattr(uploaded_file, 'filename'):
-                # File object case
-                if uploaded_file.filename == '':
-                    continue
-                    
-                print(f"Processing upload {idx + 1}: {uploaded_file.filename}")
-                
-                # Create temporary file
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-                uploaded_path = temp_file.name
-                temp_file.close()
-                
-                uploaded_file.save(uploaded_path)
-                uploaded_paths.append(uploaded_path)
-                temp_files.append(uploaded_path)
-            else:
-                # File path case
-                if isinstance(uploaded_file, str) and os.path.exists(uploaded_file):
-                    print(f"Processing file path {idx + 1}: {uploaded_file}")
-                    uploaded_paths.append(uploaded_file)
-                else:
-                    continue
-        
+            filename = uploaded_file['image'][0]
+            image_binary = uploaded_file['image'][1]
+            
+            # Use BytesIO to open the image directly from memory
+            # print(f"File: {filename}")
+            # print(f"Size of binary data: {len(image_binary)} bytes")
+            # print(f"First 10 bytes: {image_binary[:10]}")
+            # img_bytes = BytesIO(image_binary)
+            # print("img_bytes: ", img_bytes)
+            # img = Image.open(img_bytes)
+            # print(f"Received image {idx+1}:" , filename)
+            
+            # img = img.convert('RGB')
+            
+            temp_dir = 'temp'
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir)
+
+            uploaded_path = os.path.join(temp_dir, filename)
+            # with open(uploaded_path, 'wb') as f:
+            #     f.write(bytes(image_binary))
+            
+            img_bytes = BytesIO(image_binary)
+            img = Image.open(img_bytes)            
+            img = img.convert('RGB')
+            img.save(uploaded_path, "JPEG")
+
+            uploaded_paths.append(uploaded_path)
         if not uploaded_paths:
             return {'error': 'No valid images to process'}
         
@@ -244,13 +267,12 @@ def compare_multiple_images(uploaded_files, top_k=3, frequency_weight=0.4, simil
         return {'error': str(e)}
     
     finally:
+        pass
         # Clean up temporary files only
-        for temp_path in temp_files:
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception as e:
-                    print(f"Failed to remove temp file {temp_path}: {str(e)}")
+        # for uploaded_path in uploaded_paths:
+        #     if os.path.exists(uploaded_path):
+        #         os.remove(uploaded_path)
+
 if __name__ == '__main__':
     # Ensure temp directory exists
     os.makedirs("temp", exist_ok=True)

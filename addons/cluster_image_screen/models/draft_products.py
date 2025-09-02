@@ -1,7 +1,8 @@
 from odoo import fields, models, api, _
 from odoo.exceptions import ValidationError, UserError
 import base64
-from ..comparison.app import compare_multiple_images
+from io import BytesIO
+from ..comparison.app import compare_multiple_images, compare_images
 import tempfile
 import os
 import io
@@ -183,26 +184,26 @@ class ClusterDraftProducts(models.Model):
 
     def compare_button(self):
         for record in self:
-            if not record.image:
+            if not record.product_template_image_ids:
                 raise UserError("Please upload an image to compare.")
 
             # Send the first image only
-            attachment = record.image[0]
-            print("Attachment details:", attachment)
-            image_binary = base64.b64decode(attachment.datas)
-            files = {'image': (attachment.name, image_binary, attachment.mimetype)}
+            attachment = record.product_template_image_ids[0].image_1920
+            filename = record.product_template_image_ids[0].name
+            image_binary = base64.b64decode(attachment)
+            #print(attachment)
+            files = {'image': (filename, image_binary)}
 
             try:
-                response = compare_multiple_images(files)
-                response.raise_for_status()
-                data = response.json()
+                response = compare_images(files)
+                print(response)
 
                 # Save the result in a text field
                 # result_lines = [f"Match: {m['filename']}, Similarity: {m['similarity']:.4f}, ID: {m['id']}" for m in data.get('top_matches', [])]
                 # record.similarity_result = '\n'.join(result_lines)
 
                 matches = []
-                for match in data.get('top_matches', []):
+                for match in response.get('top_matches', []):
                     matches.append((0, 0, {
                         'filename': match['filename'],
                         'similarity': match['similarity'],
@@ -231,43 +232,25 @@ class ClusterDraftProducts(models.Model):
             if not record.product_template_image_ids:
                 raise UserError("Please upload at least one image to compare.")
 
-            # 1. Prepare a list of temporary files from the uploaded images
-            temp_files = []
+            files = []
             try:
                 for product_image in record.product_template_image_ids:
-                    print(f"Product image: ", product_image)
-                    if not product_image.image_1920:
-                        continue
-
-                    image_binary = base64.b64decode(product_image.image_1920)
-                    img_io = io.BytesIO(image_binary)
-
-                    temp_file = None  # Initialize temp_file to None
                     try:
-                        image = Image.open(img_io)
+                        attachment = product_image.image_1920
+                        filename = product_image.name
+                        image_binary = base64.b64decode(attachment)
 
-                        # Convert the image to RGB mode before saving as JPEG
-                        if image.mode in ('RGBA', 'LA'):
-                            image = image.convert('RGB')
-
-                        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpeg')
-
-                        # Save the converted image as a JPEG
-                        image.save(temp_file.name, 'JPEG', quality=90)
-                        temp_file.close()
-
-                        temp_files.append(temp_file.name)
+                        comparison_file = {'image': (filename, image_binary)}
+                    
+                        files.append(comparison_file)
 
                     except Exception as img_error:
                         print(f"Failed to process image: {img_error}")
-                        if temp_file is not None:  # Check if temp_file was initialized
-                            temp_file.close()
-                            os.remove(temp_file.name)
                         continue
 
                 # 2. Call the compare_multiple_images function directly
                 result = compare_multiple_images(
-                    uploaded_files=temp_files,
+                    uploaded_files=files,
                     top_k=3,  # You can make this configurable if needed
                     frequency_weight=0.4,
                     similarity_weight=0.6
@@ -305,14 +288,7 @@ class ClusterDraftProducts(models.Model):
             except Exception as e:
                 # Handle other potential errors
                 raise UserError(f"An unexpected error occurred: {str(e)}")
-            finally:
-                # Clean up temporary files
-                for temp_path in temp_files:
-                    if os.path.exists(temp_path):
-                        try:
-                            os.remove(temp_path)
-                        except Exception as e:
-                            print(f"Failed to remove temp file {temp_path}: {str(e)}")
+
 class ProductImage(models.Model):
     _inherit = 'product.image'
 
