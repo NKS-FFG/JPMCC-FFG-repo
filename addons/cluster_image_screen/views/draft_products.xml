@@ -47,7 +47,13 @@
                             <field name="productCategory" readonly="form_readonly" />
                             <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
                             <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head" />
-                            <field name="product_template_image_ids" mode="kanban" add-label="Add Media" widget="x2_many_media_viewer" />
+                            <field
+                                name="product_template_image_ids"
+                                mode="kanban"
+                                add-label="Add Media"
+                                widget="x2_many_media_viewer" 
+                                readonly="form_readonly"                       
+                            />
                         </group>
 
                         <!-- Similarity Results Tab -->

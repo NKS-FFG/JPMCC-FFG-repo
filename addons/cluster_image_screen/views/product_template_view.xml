@@ -10,6 +10,7 @@
                     <field name="covering_material"/>
                     <field name="dimensions"/>
                     <field name="other_remarks"/>
+                    <field name="clusterHeadUserId" widget="many2many_tags" options="{'no_create_edit':'1'}"/>
                 </group>
             </xpath>
         </field>

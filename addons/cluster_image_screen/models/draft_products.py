@@ -159,7 +159,8 @@ class ClusterDraftProducts(models.Model):
                 'image_1920': main_image1.image_1920,
                 'dimensions':draft.dimensions,
                 'other_remarks': draft.other_remarks,
-                'covering_material': draft.covering_material
+                'covering_material': draft.covering_material,
+                'clusterHeadUserId': [draft.clusterHeadUserId.id],
             }
 
             product = self.env['product.template'].create(product_vals)
@@ -296,8 +297,17 @@ class ProductImage(models.Model):
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
+    @api.model
+    def _get_cluster_head_domain(self):
+        cluster_head_group = self.env.ref('cluster_image_screen.cluster_head') # IMP: Assuming 'cluster_image_screen.cluster_head' is the XML ID of the cluster head group
+        return [('groups_id', 'in', [cluster_head_group.id])]
+    
     covering_material = fields.Char(string='Covering Material', tracking=True)
     dimensions = fields.Char(string='Dimensions', tracking=True)
     other_remarks = fields.Text(string='Other Remarks', tracking=True)
-
-
+    clusterHeadUserId = fields.Many2many(
+        'res.users', 
+        string='Cluster Head User', 
+        required=True, 
+        domain=lambda self: self._get_cluster_head_domain()
+    )
