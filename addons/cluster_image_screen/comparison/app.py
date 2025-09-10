@@ -34,7 +34,7 @@ def calculate_combined_score(product_matches, total_images, frequency_weight=0.4
         'total_images': total_images
     }
 
-def find_best_matches_multiple_images(uploaded_images_paths, comparison_paths, top_k=5, frequency_weight=0.4, similarity_weight=0.6):
+def find_best_matches_multiple_images(uploaded_images_paths, comparison_paths, frequency_weight, similarity_weight, top_k=5):
     """
     Find best matching products across multiple uploaded images using hybrid scoring
     
@@ -67,12 +67,11 @@ def find_best_matches_multiple_images(uploaded_images_paths, comparison_paths, t
         print(f"Processing uploaded image {idx + 1}/{total_images}: {uploaded_path}")
         
         # Get top matches for this single image
-        single_image_matches = find_top_matches_improved(uploaded_path, comparison_paths, top_k=20)
+        single_image_matches = find_top_matches_improved(uploaded_path, comparison_paths, top_k=3)
         
         # Process matches for this image
         for match in single_image_matches:
             product_key = f"{match['id']}_{match.get('product_id', 'unknown')}"
-            
             # Initialize product info if first time seeing this product
             if product_matches[product_key]['filename'] is None:
                 product_matches[product_key]['filename'] = match['filename']
@@ -117,7 +116,6 @@ def find_best_matches_multiple_images(uploaded_images_paths, comparison_paths, t
     return final_results[:top_k]
 
 
-#@app.route('/compare', methods=['POST'])
 def compare_images(files):
     """Handle single image comparison (backward compatibility)"""
     if 'image' not in files:
@@ -172,7 +170,6 @@ def compare_images(files):
         if os.path.exists(uploaded_path):
             os.remove(uploaded_path)
 
-#@app.route('/compare/multiple', methods=['POST'])
 def compare_multiple_images(uploaded_files, top_k=3, frequency_weight=0.4, similarity_weight=0.6):  
     """
         Handle multiple image comparison with hybrid scoring
@@ -203,29 +200,20 @@ def compare_multiple_images(uploaded_files, top_k=3, frequency_weight=0.4, simil
         for idx, uploaded_file in enumerate(uploaded_files):
             filename = uploaded_file['image'][0]
             image_binary = uploaded_file['image'][1]
-            
-            # Use BytesIO to open the image directly from memory
-            # print(f"File: {filename}")
-            # print(f"Size of binary data: {len(image_binary)} bytes")
-            # print(f"First 10 bytes: {image_binary[:10]}")
-            # img_bytes = BytesIO(image_binary)
-            # print("img_bytes: ", img_bytes)
-            # img = Image.open(img_bytes)
-            # print(f"Received image {idx+1}:" , filename)
-            
-            # img = img.convert('RGB')
-            
+               
             temp_dir = 'temp'
             if not os.path.exists(temp_dir):
                 os.makedirs(temp_dir)
 
             uploaded_path = os.path.join(temp_dir, filename)
-            # with open(uploaded_path, 'wb') as f:
-            #     f.write(bytes(image_binary))
-            
-            img_bytes = BytesIO(image_binary)
-            img = Image.open(img_bytes)            
-            img = img.convert('RGB')
+            image_stream = BytesIO(image_binary)
+
+            img = Image.open(image_stream)
+            print(f"Opened image: {filename}, format: {img.format}, size: {img.size}, mode: {img.mode}")
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+
+            print(f"Opened image new: {filename}, format: {img.format}, size: {img.size}, mode: {img.mode}")
             img.save(uploaded_path, "JPEG")
 
             uploaded_paths.append(uploaded_path)
@@ -267,11 +255,10 @@ def compare_multiple_images(uploaded_files, top_k=3, frequency_weight=0.4, simil
         return {'error': str(e)}
     
     finally:
-        pass
-        # Clean up temporary files only
-        # for uploaded_path in uploaded_paths:
-        #     if os.path.exists(uploaded_path):
-        #         os.remove(uploaded_path)
+        #Clean up temporary files only
+        for uploaded_path in uploaded_paths:
+            if os.path.exists(uploaded_path):
+                os.remove(uploaded_path)
 
 if __name__ == '__main__':
     # Ensure temp directory exists

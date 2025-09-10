@@ -163,17 +163,16 @@ class ClusterDraftProducts(models.Model):
             }
 
             product = self.env['product.template'].create(product_vals)
+            main_image1.write({
+                'product_tmpl_id': product.id
+            })
 
-            # main_image1.write({
-            #     'product_tmpl_id': product.id
-            # })
-             # Copy additional images (excluding the first one that's already set as main image)
+
             for image in draft.product_template_image_ids[1:]:
                 image.write({
                     'product_tmpl_id': product.id
                 })
             
-            # Optional: update status or mark draft as converted
             draft.write({'submit_status': 'approved'})  # Add 'published' if needed
     
     def reject_product(self):
@@ -191,16 +190,12 @@ class ClusterDraftProducts(models.Model):
             attachment = record.product_template_image_ids[0].image_1920
             filename = record.product_template_image_ids[0].name
             image_binary = base64.b64decode(attachment)
-            #print(attachment)
+            
             files = {'image': (filename, image_binary)}
 
             try:
                 response = compare_images(files)
                 print(response)
-
-                # Save the result in a text field
-                # result_lines = [f"Match: {m['filename']}, Similarity: {m['similarity']:.4f}, ID: {m['id']}" for m in data.get('top_matches', [])]
-                # record.similarity_result = '\n'.join(result_lines)
 
                 matches = []
                 for match in response.get('top_matches', []):
@@ -252,8 +247,8 @@ class ClusterDraftProducts(models.Model):
                 result = compare_multiple_images(
                     uploaded_files=files,
                     top_k=3,  # You can make this configurable if needed
-                    frequency_weight=0.4,
-                    similarity_weight=0.6
+                    frequency_weight=0.5,
+                    similarity_weight=0.5
                 )
 
                 print("result: ", result)

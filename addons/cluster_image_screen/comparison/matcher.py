@@ -191,20 +191,24 @@ def get_image_paths_from_db():
         )
         cur = conn.cursor()
         cur.execute("""              
-            SELECT 
-            DISTINCT ON (pt.id)
-            pt.id as product_id,
-            pt.name as product_name,
-            ia.id as image_id,
-            ia.store_fname as store_fname
+            SELECT
+                PT.ID AS PRODUCT_ID,
+                PT.NAME AS PRODUCT_NAME,
+                ATTACHMENT.ID AS IMAGE_ID,
+                ATTACHMENT.STORE_FNAME AS STORE_FNAME
             FROM
-            PRODUCT_TEMPLATE pt
-            LEFT JOIN IR_ATTACHMENT IA ON IA.RES_MODEL = 'product.template'
-            AND ia.res_id = pt.id
-            AND ia.mimetype LIKE 'image/%'
-            WHERE pt.active = true AND pt.is_published = true
-            ORDER BY pt.id, ia.res_field;
+                IR_ATTACHMENT AS ATTACHMENT
+                JOIN PRODUCT_IMAGE AS PI ON ATTACHMENT.RES_ID = PI.ID
+                JOIN PRODUCT_TEMPLATE AS PT ON PI.PRODUCT_TMPL_ID = PT.ID
+            WHERE
+                ATTACHMENT.RES_MODEL = 'product.image'
+                AND DRAFT_PRODUCT_ID IS NOT NULL
+                AND ATTACHMENT.RES_FIELD = 'image_1920'
+                AND PT.IS_PUBLISHED = TRUE
+            ORDER BY
+                PT.ID;
         """)
+
         rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -274,7 +278,6 @@ def inspect_file(file_path):
     except Exception as e:
         print(f"PIL failed to open: {str(e)}")
 
-# === Main matching logic (original, for backward compatibility) ===
 def find_top_matches_improved(reference_image_path, comparison_image_dicts, top_k=3):
     """Find top matching images based on feature similarity."""
     try:
@@ -304,7 +307,7 @@ def find_top_matches_improved(reference_image_path, comparison_image_dicts, top_
             sim = cosine_similarity(reference_features, comp_features)[0][0]
             similarities.append({
                 "filename": product_name,
-                "similarity": float(sim) * 100,  # Convert to percentage
+                "similarity": float(sim) * 100,  
                 "id": image_id,
                 "product_id": product_id
             })
