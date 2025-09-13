@@ -5,17 +5,27 @@ from PIL import Image
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import psycopg2
-import os
-import warnings
+import os, platform
 from collections import defaultdict
+from odoo.tools import config
 
 # ==== CONFIGURATION ====
-DB_NAME = "aniruddhadhawad"  # replace with your actual DB name
-DB_USER = "aniruddhadhawad"
-DB_PASSWORD = ""  # add password if required
-DB_HOST = "localhost"
-DB_PORT = "5432"
-DATA_DIR = "/Users/aniruddhadhawad/Library/Application Support/Odoo/"
+
+def get_default_data_dir():
+    system = platform.system()
+    if system == "Darwin":  # macOS
+        return os.path.expanduser("~/Library/Application Support/Odoo/")
+    elif system == "Windows":
+        return os.path.join(os.environ.get("APPDATA", ""), "Odoo")
+    else:  # Linux and others
+        return os.path.expanduser("~/.local/share/Odoo/")
+    
+DB_NAME = config.get('db_name') 
+DB_USER = config.get('db_user')
+DB_PASSWORD = ""  
+DB_HOST = config.get('db_host')
+DB_PORT = config.get('db_port')
+DATA_DIR = get_default_data_dir()
 
 # ==== Load Pre-trained Model ====
 model = models.resnet50(pretrained=True)
