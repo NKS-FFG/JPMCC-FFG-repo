@@ -1,12 +1,8 @@
 from odoo import fields, models, api, _
 from odoo.exceptions import ValidationError, UserError
 import base64
-from io import BytesIO
 from ..comparison.app import compare_multiple_images, compare_images
-import tempfile
-import os
-import io
-from PIL import Image
+import imghdr
 
 class ClusterMatchResult(models.Model):
     _name = 'cluster.match.result'
@@ -141,7 +137,7 @@ class ClusterDraftProducts(models.Model):
         for draft in self:
             if draft.submit_status != 'submitted':
                 raise ValidationError("Only approved draft products can be published to eCommerce.")
-
+            
             if not draft.product_template_image_ids:
                 raise ValidationError("At least one image is required to publish the product.")
 
@@ -185,7 +181,7 @@ class ClusterDraftProducts(models.Model):
     def compare_button(self):
         for record in self:
             if not record.product_template_image_ids:
-                raise UserError("Please upload an image to compare.")
+                raise UserError("Please upload an image to compare.")               
 
             # Send the first image only
             attachment = record.product_template_image_ids[0].image_1920
@@ -235,6 +231,12 @@ class ClusterDraftProducts(models.Model):
                         attachment = product_image.image_1920
                         filename = product_image.name
                         image_binary = base64.b64decode(attachment)
+                        image_type = imghdr.what(None, h=image_binary)
+                        print("imagte_type:", image_type)
+                        if image_type not in ['jpeg', 'png', 'jpg']:
+                            raise UserError(
+                                "Unsupported image format. Please upload only JPEG or PNG images. "
+                            )
 
                         comparison_file = {'image': (filename, image_binary)}
                     
@@ -242,7 +244,10 @@ class ClusterDraftProducts(models.Model):
 
                     except Exception as img_error:
                         print(f"Failed to process image: {img_error}")
-                        continue
+                        raise UserError(
+                                img_error
+                            )
+                        
 
                 # 2. Call the compare_multiple_images function directly
                 result = compare_multiple_images(
