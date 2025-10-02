@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_cluster_draft_products,access.custom.model,model_cluster_draft_products,,1,1,1,1
+access_cluster_match_result_user,cluster.match.result.user,model_cluster_match_result,base.group_user,1,1,1,1

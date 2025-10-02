@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="first_order_tree_custom" model="ir.ui.view">
+        <field name="name">first.order.tree.custom</field>
+        <field name="model">cluster.draft.products</field>
+        <field name="priority">1</field>
+        <field name="arch" type="xml">
+            <list string="Sales Orders" sample="1">
+
+                <field name="productName" />
+                <field name="description" />
+                <field name="productCategory" />
+                <field name="clusterHeadUserId" />
+                <field name="submit_status" />
+            </list>
+        </field>
+    </record>
+
+    <record id="view_custom_model_form" model="ir.ui.view">
+        <field name="name">cluster.draft.products.form</field>
+        <field name="model">cluster.draft.products</field>
+        <field name="type">form</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_approve_product" type="object" string="Submit To Review" class="btn-primary" invisible="is_submit_button_disabled" />
+                    <button name="convert_to_ecommerce_product" type="object" string="Approve Product" class="btn-primary" icon="fa-check" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_approve_button_invisible" />
+                    <button name="reject_product" type="object" string="Reject Product" class="btn-primary" icon="fa-times" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_approve_button_invisible" />
+                </header>
+                <sheet>
+
+                    <group>
+                        <group>
+                            <field name="submit_status" readonly="1"/>
+                            <field name="productName" readonly="form_readonly" />
+                            <field name="description" readonly="form_readonly" />
+                            <field name="tentative_price" readonly="form_readonly" />
+                            <field name="covering_material" readonly="form_readonly" />
+                            <field name="dimensions" readonly="form_readonly"/>
+
+                            <field name="other_remarks" readonly="form_readonly"/>
+                            <button name="compare_button_modified" type="object" string="Compare" class="btn-primary" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_compare_button_invisible"/>
+
+                        </group>
+                        <group>
+                            <field name="productCategory" readonly="form_readonly" />
+                            <field name="clusterHeadUserId" groups="cluster_image_screen.cluster_reviewer,base.group_system"/>
+                            <field name="clusterHeadUserId" readonly="1" groups="cluster_image_screen.cluster_head" />
+                            <field
+                                name="product_template_image_ids"
+                                mode="kanban"
+                                add-label="Add Media"
+                                widget="x2_many_media_viewer" 
+                                readonly="form_readonly"                       
+                            />
+                        </group>
+
+                        <!-- Similarity Results Tab -->
+                        <notebook>
+                            <page string="Similarity Matches" groups="cluster_image_screen.cluster_reviewer,base.group_system" invisible="is_similarity_result_invisible">
+                                <field name="match_ids" nolabel="1" readonly="1">
+                                    <list delete="false">
+                                        <field name="similarity"/>
+                                        <field name="filename"/>
+                                        <field name="image_display" widget="html" string="Image Preview"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_custom_model" model="ir.actions.act_window">
+        <field name="name">Cluster Head - Draft Products</field>
+        <field name="res_model">cluster.draft.products</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p>Create and manage your custom models here.</p>
+        </field>
+    </record>
+
+    <!-- Menu Item -->
+    <!-- <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="sale.sale_menu_root" action="action_custom_model" sequence="10" /> -->
+    <menuitem id="menu_custom_model" name="Cluster Draft Products" parent="website_sale.menu_catalog" action="action_custom_model" sequence="10" />
+
+    <!-- Root Menu -->
+    <menuitem id="menu_custom_model_root" name="Custom Module" sequence="10"/>
+
+</odoo>
