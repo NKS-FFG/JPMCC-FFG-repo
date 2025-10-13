@@ -233,17 +233,30 @@ def get_image_paths_from_db():
         cur.close()
         conn.close()
 
+        logger.info(f"Retrieved {len(rows)} rows from database")
+        
         result = []
         for row in rows:
             if len(row) >= 4 and row[3]:  # Check if store_fname exists and is not NULL
                 product_id, product_name, image_id, store_fname = row[0], row[1], row[2], row[3]
                 
+                file_path = os.path.join(DATA_DIR, 'filestore', DB_NAME, store_fname)
+                filename = product_name.get('en_US', str(product_name)) if isinstance(product_name, dict) else str(product_name)
+                
+                logger.debug(f"Processing product: ID={product_id}, Name={filename}, Image ID={image_id}")
+                
+                if not os.path.exists(file_path):
+                    logger.warning(f"Image file not found: {file_path}")
+                    continue
+                
                 result.append({
-                    "path": os.path.join(DATA_DIR, 'filestore', DB_NAME, store_fname),
-                    "filename": product_name.get('en_US', str(product_name)) if isinstance(product_name, dict) else str(product_name),
+                    "path": file_path,
+                    "filename": filename,
                     "id": image_id,
                     "product_id": product_id
                 })
+                
+        logger.info(f"Successfully processed {len(result)} valid image entries")
         return result
     
     except Exception as e:
