@@ -11,11 +11,11 @@ from collections import defaultdict
 from odoo.tools import config
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# NOTE: Do NOT call logging.basicConfig() inside Odoo modules — Odoo configures
+# logging centrally. Create a module logger and allow it to propagate so Odoo's
+# handlers pick up the messages.
 logger = logging.getLogger(__name__)
+logger.propagate = True
 
 # ==== CONFIGURATION ====
 
