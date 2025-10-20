@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="inherit_product_item_hide_price" 
+              inherit_id="website_sale.products_item" 
+              name="Hide Price and Contact Us">
+        
+        <xpath expr="//div[hasclass('product_price')]" position="attributes">
+            <attribute name="groups">base.group_portal,base.group_user</attribute>
+        </xpath>
+    </template>
+    <template id="product_hide" inherit_id="website_sale.product">
+      <!--  Add contact us button for public users  -->
+      <xpath expr="//div[@id='add_to_cart_wrap']" position="before">
+        <div class="mt-2 mb-3 pt-5" t-if="request.env.user._is_public()">
+      
+        </div>
+      </xpath>
+</template>
+<!--  Hide product price in price widget  -->
+<template id="product_price_hide" inherit_id="website_sale.product_price">
+  <xpath expr="//div[@itemprop='offers']" position="attributes">
+  <attribute name="t-if">not request.env.user._is_public()</attribute>
+  </xpath>
+</template>
+</odoo>

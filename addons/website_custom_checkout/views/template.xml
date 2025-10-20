@@ -9,10 +9,25 @@
                             <h1 class="text-center mb-5">Enquiry Overview</h1>
                             
                             <t t-if="website_sale_order and website_sale_order.website_order_line">
-                                                             
-                                <div id="cart_products"
-                                    t-if="website_sale_order and website_sale_order.website_order_line"
-                                    class="js_cart_lines d-flex flex-column mb32">
+                                <!-- Alerts for form submission feedback -->
+                                <t t-if="request.params.get('quote_success')">
+                                    <div class="alert alert-success" role="alert">
+                                        <t t-if="request.params.get('order_name')">
+                                            Your quote request has been received. Reference: <strong t-esc="request.params.get('order_name')"/>. Our team will contact you shortly.
+                                        </t>
+                                        <t t-else="">
+                                            Your quote request has been received. Our team will contact you shortly.
+                                        </t>
+                                    </div>
+                                </t>
+                                <t t-if="request.params.get('quote_error')">
+                                    <div class="alert alert-danger" role="alert">Please fill all required fields and try again.</div>
+                                </t>
+                                <div class="row">
+                                    <div class="col-md-7">
+                                        <div id="cart_products"
+                                            t-if="website_sale_order and website_sale_order.website_order_line"
+                                            class="js_cart_lines d-flex flex-column mb32">
                                     <t t-set="show_qty" t-value="is_view_active('website_sale.product_quantity')"/>
                                             <div t-foreach="website_sale_order.website_order_line"
                                         t-as="line"
@@ -51,14 +66,15 @@
                                                     <t t-set="div_class" t-value="''"/>
                                                 </t>
                                                 <div name="o_wsale_cart_line_button_container">
-                                                    <a href='#'
-                                                      class="js_delete_product d-none d-md-inline-block small"
-                                                      aria-label="Remove from cart"
-                                                      title="Remove from cart">Remove Me Neel</a>
-                                                    <button class="js_delete_product btn btn-light d-inline-block d-md-none"
-                                                            title="remove">
-                                                        <i class="fa fa-trash-o"/>
-                                                    </button>
+                                                        <a t-attf-href="/custom_checkout/remove_line?line_id=#{line.id}"
+                                                            class="js_delete_product d-none d-md-inline-block small"
+                                                            aria-label="Remove from cart"
+                                                            title="Remove from cart">Remove</a>
+                                                        <a t-attf-href="/custom_checkout/remove_line?line_id=#{line.id}"
+                                                                class="js_delete_product btn btn-light d-inline-block d-md-none"
+                                                                title="remove">
+                                                                <i class="fa fa-trash-o"/>
+                                                        </a>
                                                 </div>
                                                 <t t-if="line.product_type == 'combo'">
                                                     <div
@@ -76,7 +92,7 @@
                                                     <t t-if="not line._is_not_sellable_line()">
                                                             <t t-if="show_qty">
                                                                     <a href="#"
-                                                                        class="btn btn-link js_add_cart_json"
+                                                                        class="btn btn-link custom_js_add_cart"
                                                                         aria-label="Remove one"
                                                                         title="Remove one"
                                                                         t-att-data-line-id="line.id"
@@ -85,7 +101,7 @@
                                                                             <i class="position-relative z-1 fa fa-minus"/>
                                                                     </a>
                                                                     <input type="number"
-                                                                                class="js_quantity quantity form-control text-center"
+                                                                                class="custom_js_quantity quantity form-control text-center"
                                                                                 step="1" min="1"
                                                                                 data-min="1"
                                                                                 t-att-data-line-id="line.id"
@@ -100,7 +116,7 @@
                                                                             </a>
                                                                     </t>
                                                                     <a href="#"
-                                                                        class="btn btn-link js_add_cart_json"
+                                                                        class="btn btn-link custom_js_add_cart"
                                                                         aria-label="Add one"
                                                                         title="Add one"
                                                                         t-att-data-line-id="line.id"
@@ -111,7 +127,7 @@
                                                             </t>
                                                             <t t-else="">
                                                                     <input type="hidden"
-                                                                                class="js_quantity form-control quantity"
+                                                                                class="custom_js_quantity form-control quantity"
                                                                                 t-att-data-line-id="line.id"
                                                                                 t-att-data-product-id="line.product_id.id"
                                                                                 t-att-value="line._get_displayed_quantity()"/>
@@ -119,23 +135,230 @@
                                                     </t>
                                                     <t t-else="">
                                                         <span class="w-100 text-muted" t-esc="int(line.product_uom_qty)"/>
-                                                        <input type="hidden"
-                                                              class="js_quantity quantity form-control"
-                                                              t-att-data-line-id="line.id"
-                                                              t-att-data-product-id="line.product_id.id"
-                                                              t-att-value="line._get_displayed_quantity()"/>
+                                      <input type="hidden"
+                                          class="custom_js_quantity quantity form-control"
+                                          t-att-data-line-id="line.id"
+                                          t-att-data-product-id="line.product_id.id"
+                                          t-att-value="line._get_displayed_quantity()"/>
                                                     </t>
                                                 </div>
                                             </div>
                                         </t>
                                     </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="card p-3">
+                                            <h5 class="mb-3">Your details</h5>
+                                            <!-- Customer details form: name, email, phone, country, state, city -->
+                                            <form class="row g-3" method="post" action="/custom_checkout/get_quote">
+                                                <t t-nocache="csrf_token">
+                                                    <input type="hidden" id="custom_csrf_token" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                </t>
+                                                <div class="col-12">
+                                                    <label for="cust_name" class="form-label">Full name</label>
+                                                    <input id="cust_name" name="name" type="text" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_email" class="form-label">Email</label>
+                                                    <input id="cust_email" name="email" type="email" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_phone" class="form-label">Phone</label>
+                                                    <input id="cust_phone" name="phone" type="tel" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_country" class="form-label">Country</label>
+                                                    <input id="cust_country" name="country" type="text" class="form-control" placeholder="Country name" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_state" class="form-label">State</label>
+                                                    <input id="cust_state" name="state" type="text" class="form-control" placeholder="State / Province"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_city" class="form-label">City</label>
+                                                    <input id="cust_city" name="city" type="text" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12 text-end">
+                                                    <button type="submit" class="btn btn-primary">Get Quote <i class="fa fa-chevron-right"/></button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="clearfix mt-3">
-                                    <a class="btn btn-primary pull-right" href="/contactus">
-                                        Request a Quote <i class="fa fa-chevron-right"/>
-                                    </a>
-                                </div>
-                                
+                                <!-- Country/state are plain text inputs to allow manual entry -->
+                                <script type="text/javascript"><![CDATA[
+                                    (function(){
+                                        function ajaxUpdate(line_id, delta, button){
+                                            var payload = {line_id: line_id, quantity: delta};
+                                            fetch('/custom_checkout/update_line_qty', {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'Accept': 'application/json',
+                                                },
+                                                body: JSON.stringify(payload),
+                                                credentials: 'same-origin'
+                                            })
+                                            .then(function(resp){
+                                                return resp.json();
+                                            })
+                                            .then(function(data){
+                                                data = data.result
+                                                if(!data || !data.success){
+                                                    console.warn('update failed', data);
+                                                    return;
+                                                }
+                                                // find input by data-line-id (use custom class to avoid Odoo default handlers)
+                                                var inputs = document.querySelectorAll('input.custom_js_quantity[data-line-id="'+line_id+'"]');
+                                                if(inputs && inputs.length){
+                                                    var input = inputs[0];
+                                                    if(data.new_qty <= 0){
+                                                        // remove DOM element for the line
+                                                        var lineEl = input.closest('.o_cart_product');
+                                                        if(lineEl) lineEl.remove();
+                                                    } else {
+                                                        input.value = data.new_qty;
+                                                    }
+                                                }
+                                                res = data;
+                                                // update all matching cart quantity badge(s)
+                                                var badgeSelectors = ['.my_cart_quantity', '[data-cart-quantity]'];
+                                                badgeSelectors.forEach(function(sel){
+                                                    var els = document.querySelectorAll(sel);
+                                                    els.forEach(function(el){
+                                                        el.textContent = res.cart_quantity || 0;
+                                                        if(el.classList && el.classList.contains('d-none')){
+                                                            el.classList.toggle('d-none', (res.cart_quantity || 0) === 0);
+                                                        }
+                                                    });
+                                                });
+                                                // keep website_sale session storage in sync so other website JS sees the change
+                                                try{
+                                                    if(window.sessionStorage){
+                                                        sessionStorage.setItem('website_sale_cart_quantity', String(res.cart_quantity || 0));
+                                                    }
+                                                }catch(e){/* ignore */}
+                                                // dispatch a custom event so other scripts (or themes) can react
+                                                try{
+                                                    var evt = new CustomEvent('custom_cart:updated', {detail: {cart_quantity: res.cart_quantity || 0}});
+                                                    document.dispatchEvent(evt);
+                                                    if(window.jQuery){
+                                                        jQuery(document).trigger('custom_cart:updated', [res.cart_quantity || 0]);
+                                                    }
+                                                }catch(e){/* ignore */}
+                                            }).catch(function(err){
+                                                console.error('AJAX error', err);
+                                            });
+                                        }
+
+                                        document.addEventListener('click', function(ev){
+                                            var el = ev.target;
+                                            // handle clicks on the +/- buttons inside .custom_js_add_cart (custom controls)
+                                            var btn = el.closest && el.closest('.custom_js_add_cart');
+                                            if(btn){
+                                                        ev.preventDefault();
+                                                        // prevent other listeners (website default handlers) from running and redirecting
+                                                        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+                                                // prefer dataset where possible
+                                                var lineIdRaw = (btn.dataset && btn.dataset.lineId) || btn.getAttribute('data-line-id') || btn.getAttribute('t-att-data-line-id');
+                                                var deltaRaw = (btn.dataset && btn.dataset.quantity) || btn.getAttribute('data-quantity') || btn.getAttribute('t-att-data-quantity') || '0';
+                                                var lineId = parseInt(lineIdRaw, 10);
+                                                var delta = parseInt(deltaRaw, 10) || 0;
+                                                if(isNaN(lineId)){
+                                                    console.error('invalid line id on button', lineIdRaw, btn);
+                                                    return;
+                                                }
+                                                var payload = {line_id: lineId, quantity: delta};
+                                                console.debug('update_line_qty payload', payload);
+                                                ajaxUpdate(lineId, delta, btn);
+                                            }
+                                        }, true);
+                                        // Listen for direct quantity edits and send absolute updates (debounced)
+                                        var qtyTimers = {};
+                                        document.addEventListener('input', function(ev){
+                                            var input = ev.target;
+                                            // listen only to changes on our custom inputs to avoid Odoo default handlers
+                                            if(!input || !input.classList || !input.classList.contains('custom_js_quantity')) return;
+                                            ev.stopPropagation();
+                                            ev.stopImmediatePropagation();
+                                            ev.preventDefault();
+                                            var lineIdRaw = input.getAttribute('data-line-id') || input.getAttribute('t-att-data-line-id');
+                                            var lineId = parseInt(lineIdRaw, 10);
+                                            if(isNaN(lineId)) return;
+                                            var rawVal = input.value;
+                                            if(typeof rawVal === 'string') rawVal = rawVal.trim();
+                                            // If empty string, do not update the cart (user still typing)
+                                            if(rawVal === '' || rawVal === null || typeof rawVal === 'undefined'){
+                                                return;
+                                            }
+                                            var val = parseInt(rawVal, 10);
+                                            if(isNaN(val)){
+                                                console.error('invalid qty input', rawVal);
+                                                return;
+                                            }
+                                            // debounce
+                                            if(qtyTimers[lineId]) clearTimeout(qtyTimers[lineId]);
+                                            qtyTimers[lineId] = setTimeout(function(){
+                                                console.debug('update_line_qty set payload', {line_id: lineId, set_qty: val});
+                                                fetch('/custom_checkout/update_line_qty', {
+                                                    method: 'POST',
+                                                    headers: {'Content-Type': 'application/json','Accept': 'application/json'},
+                                                    body: JSON.stringify({line_id: lineId, set_qty: val}),
+                                                    credentials: 'same-origin'
+                                                }).then(function(r){return r.json();}).then(function(res){
+                                                    var data = res.result || res;
+                                                    if(!data || !data.success){
+                                                        console.warn('set_qty update failed', data);
+                                                        return;
+                                                    }
+                                                    if(data.new_qty <= 0){
+                                                        var lineEl = input.closest('.o_cart_product'); if(lineEl) lineEl.remove();
+                                                    } else {
+                                                        input.value = data.new_qty;
+                                                    }
+                                                    // update cart badge(s) to keep header in sync
+                                                    try{
+                                                        var badgeSelectors = ['.my_cart_quantity', '[data-cart-quantity]'];
+                                                        badgeSelectors.forEach(function(sel){
+                                                            var el = document.querySelector(sel);
+                                                            if(!el) return;
+                                                            el.textContent = data.cart_quantity || 0;
+                                                            if(el.classList && el.classList.contains('d-none')){
+                                                                el.classList.toggle('d-none', (data.cart_quantity || 0) === 0);
+                                                            }
+                                                        });
+                                                        if(window.sessionStorage){
+                                                            sessionStorage.setItem('website_sale_cart_quantity', String(data.cart_quantity || 0));
+                                                        }
+                                                    }catch(err){
+                                                        console.error('badge update error', err);
+                                                    }
+                                                }).catch(function(e){console.error(e);});
+                                            }, 700);
+                                        }, true);
+                                    })();
+                                        // Ensure CSRF token is fresh before submitting the quote form
+                                        <!-- var quoteForm = document.querySelector('form[action="/custom_checkout/get_quote"]');
+                                        if(quoteForm){
+                                            quoteForm.addEventListener('submit', function(ev){
+                                                // synchronous prevention until token fetched
+                                                ev.preventDefault();
+                                                fetch('/custom_checkout/get_csrf', {method: 'POST', credentials: 'same-origin'}).then(function(r){return r.json();}).then(function(j){
+                                                    if(j && j.csrf_token){
+                                                        var inp = document.getElementById('custom_csrf_token');
+                                                        if(inp) inp.value = j.csrf_token;
+                                                    }
+                                                    // submit the form after token is updated
+                                                    quoteForm.submit();
+                                                }).catch(function(e){
+                                                    // fallback: submit anyway (server may reject)
+                                                    console.error('csrf fetch failed', e);
+                                                    quoteForm.submit();
+                                                });
+                                            }, false);
+                                        } -->
+                                ]]></script>
                             </t>
                             <t t-else="">
                                 <p class="text-center text-muted">Your cart is empty.</p>
@@ -146,6 +369,5 @@
                 </div>
             </div>
         </t>
-    <t t-call-assets="web.assets_frontend"/>
     </template> 
 </odoo>

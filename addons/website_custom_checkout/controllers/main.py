@@ -4,6 +4,8 @@ from odoo.addons.website_sale.controllers.main import WebsiteSale
 from odoo import fields
 from odoo.exceptions import ValidationError
 from odoo.fields import Command
+from werkzeug.exceptions import NotFound
+from urllib.parse import quote_plus
 
 class CustomWebsiteSale(WebsiteSale):
 
@@ -65,3 +67,200 @@ class CustomWebsiteSale(WebsiteSale):
         print(order,' ',order.website_order_line)
         values.update(self._cart_values(**post))    
         return http.request.render("website_custom_checkout.custom_cart_with_products", values)
+
+    @http.route(['/custom_checkout/get_quote'], type='http', auth='public', website=True, methods=['POST'], csrf=True)
+    def custom_get_quote(self, **post):
+        """
+        Handle customer details form submission, create/find partner and create/update a sale.order (quotation).
+        """
+        # Required fields (only these must be provided)
+        required = ['name', 'email', 'phone', 'country', 'city']
+        missing = [f for f in required if not post.get(f)]
+        if missing:
+            # simple feedback: redirect back with a query param (could be improved)
+            return request.redirect('/shop/cart?quote_error=missing_fields')
+
+        Partner = request.env['res.partner'].sudo()
+        # Try to find existing partner by email, else create
+        partner = None
+        if post.get('email'):
+            partner = Partner.search([('email', '=', post.get('email'))], limit=1)
+
+        if not partner:
+            vals = {
+                'name': post.get('name'),
+                'email': post.get('email'),
+                'phone': post.get('phone'),
+                'country_id': None,
+                'state_id': None,
+                'city': post.get('city'),
+            }
+            # prefer numeric ids (country_id/state_id) from select fields; otherwise fallback to name search
+            if post.get('country_id'):
+                try:
+                    vals['country_id'] = int(post.get('country_id'))
+                except Exception:
+                    vals['country_id'] = None
+            else:
+                country = request.env['res.country'].sudo().search([('name', 'ilike', post.get('country') or '')], limit=1)
+                if country:
+                    vals['country_id'] = country.id
+
+            if post.get('state_id'):
+                try:
+                    vals['state_id'] = int(post.get('state_id'))
+                except Exception:
+                    vals['state_id'] = None
+            else:
+                state = request.env['res.country.state'].sudo().search([('name', 'ilike', post.get('state') or '')], limit=1)
+                if state:
+                    vals['state_id'] = state.id
+
+            partner = Partner.create(vals)
+
+        # Attach partner to current cart (draft sale.order). If no order exists, create one.
+        order = request.website.sale_get_order(force_create=True)
+        # assign partner to order
+        order.sudo().partner_id = partner
+        # set partner invoice and shipping if needed
+        order.sudo().partner_invoice_id = partner
+        order.sudo().partner_shipping_id = partner
+
+        # Optionally mark the order as quotation and add a note
+        order.sudo().message_post(body=f"Quotation requested by {partner.name} ({partner.email})")
+
+        # After creating the quotation, clear the user's session cart so the
+        # redirected cart page shows an empty cart while the quotation/order
+        # remains saved in the database.
+
+        # Redirect to cart with success flag and order reference (escaped)
+        order_ref = getattr(order, 'name', None) or ''
+        try:
+            order_ref_q = quote_plus(order_ref)
+        except Exception:
+            order_ref_q = ''
+        return request.redirect(f'/shop/cart?quote_success=1&order_name={order_ref_q}')
+
+    @http.route(['/custom_checkout/get_csrf'], type='json', auth='public', website=True)
+    def get_csrf(self, **kw):
+        """Return a fresh CSRF token for client-side forms.
+
+        This helps avoid 'invalid CSRF token' errors when pages are cached or
+        when the hidden token in a form becomes stale.
+        """
+        return {'csrf_token': request.csrf_token}
+
+    @http.route(['/custom_checkout/remove_line'], type='http', auth='public', website=True)
+    def remove_line(self, line_id=None, **kw):
+        """Remove a sale.order.line from the current website cart if it belongs to it."""
+        try:
+            line_id = int(line_id)
+        except Exception:
+            return request.redirect('/shop/cart')
+
+        SaleLine = request.env['sale.order.line'].sudo()
+        line = SaleLine.search([('id', '=', line_id)], limit=1)
+        if not line:
+            return request.redirect('/shop/cart')
+
+        # Only allow removing lines that belong to the current website draft order
+        order = request.website.sale_get_order()
+        if order and line.order_id and line.order_id.id == order.id:
+            try:
+                line.unlink()
+            except Exception:
+                # silent fail for now
+                pass
+
+        return request.redirect('/shop/cart')
+
+    @http.route(['/custom_checkout/update_line_qty'], type='json', auth='public', website=True)
+    def update_line_qty(self, line_id=None, quantity=None, **kw):
+        """Update the quantity of a sale.order.line belonging to the current website cart.
+
+        Expects JSON with: { line_id: int, quantity: int } where quantity is a delta (can be negative)
+        Returns JSON: { success: bool, line_id: int, new_qty: float, cart_quantity: int }
+        """
+        # Read JSON body first (request.jsonrequest) for type='json' calls, fallback to kwargs
+        data = None
+        if getattr(request, 'jsonrequest', None):
+            data = request.jsonrequest
+        else:
+            # sometimes fetch() doesn't populate jsonrequest for type='json', try raw body
+            try:
+                raw = request.httprequest.get_data(as_text=True)
+                if raw:
+                    import json
+                    data = json.loads(raw)
+                else:
+                    data = kw
+            except Exception:
+                data = kw
+        # Debug log payload (temporary)
+        _logger = request.env['ir.logging'] if hasattr(request.env, 'ir') else None
+        try:
+            # we can't always write to ir.logging in some contexts; fallback to print
+            print('update_line_qty payload:', data)
+        except Exception:
+            pass
+        # prefer values from the JSON body
+        print('data:', data)
+        line_id = data.get('line_id', line_id)
+        quantity = data.get('quantity', quantity)
+
+        try:
+            line_id = int(line_id)
+        except Exception:
+            return {'success': False, 'error': 'invalid_line_id'}
+
+        # Support either a delta ('quantity') or an absolute set ('set_qty')
+        delta = None
+        set_qty = None
+        if 'set_qty' in data:
+            try:
+                set_qty = int(data.get('set_qty'))
+            except Exception:
+                return {'success': False, 'error': 'invalid_set_quantity'}
+        else:
+            try:
+                delta = int(quantity)
+            except Exception:
+                return {'success': False, 'error': 'invalid_quantity'}
+
+        order = request.website.sale_get_order()
+        if not order:
+            return {'success': False, 'error': 'no_order'}
+
+        SaleLine = request.env['sale.order.line'].sudo()
+        line = SaleLine.search([('id', '=', line_id), ('order_id', '=', order.id)], limit=1)
+        if not line:
+            return {'success': False, 'error': 'line_not_found'}
+
+        try:
+            if set_qty is not None:
+                # set absolute quantity
+                new_qty = float(set_qty)
+                if new_qty <= 0:
+                    line.unlink()
+                    new_qty = 0
+                else:
+                    line.sudo().write({'product_uom_qty': new_qty})
+            else:
+                # delta update
+                new_qty = float(line.product_uom_qty) + (delta or 0)
+                if new_qty <= 0:
+                    line.unlink()
+                    new_qty = 0
+                else:
+                    line.sudo().write({'product_uom_qty': new_qty})
+        except Exception:
+            return {'success': False, 'error': 'update_failed'}
+
+        # refresh order (sudo to read cart qty)
+        order = request.env['sale.order'].sudo().browse(order.id)
+        return {
+            'success': True,
+            'line_id': line_id,
+            'new_qty': new_qty,
+            'cart_quantity': order.cart_quantity,
+        }
