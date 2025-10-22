@@ -118,23 +118,58 @@ class CustomWebsiteSale(WebsiteSale):
 
             partner = Partner.create(vals)
 
-        # Attach partner to current cart (draft sale.order). If no order exists, create one.
-        order = request.website.sale_get_order(force_create=True)
-        # assign partner to order
-        order.sudo().partner_id = partner
-        # set partner invoice and shipping if needed
-        order.sudo().partner_invoice_id = partner
-        order.sudo().partner_shipping_id = partner
+        # Build a new quotation (always create a new sale.order) and copy the
+        # current cart lines into it (if any). This ensures each Get Quote
+        # action generates its own quotation while the customer's cart is
+        # emptied afterwards.
+        SaleOrder = request.env['sale.order'].sudo()
+        current_order = request.website.sale_get_order()
 
-        # Optionally mark the order as quotation and add a note
-        order.sudo().message_post(body=f"Quotation requested by {partner.name} ({partner.email})")
+        # create the new quotation with partner info
+        new_order_vals = {
+            'partner_id': partner.id,
+            'partner_invoice_id': partner.id,
+            'partner_shipping_id': partner.id,
+            'website_id': request.website.id,
+        }
+        new_order = SaleOrder.create(new_order_vals)
 
-        # After creating the quotation, clear the user's session cart so the
-        # redirected cart page shows an empty cart while the quotation/order
-        # remains saved in the database.
+        # copy lines from current cart into the new quotation (copy preserves
+        # product, description, qty, etc.). Use sudo to ensure permissions.
+        try:
+            if current_order and current_order.order_line:
+                for line in current_order.order_line:
+                    try:
+                        line.sudo().copy({'order_id': new_order.id})
+                    except Exception:
+                        # ignore problems copying a specific line
+                        continue
+        except Exception:
+            # ignore any non-fatal copy errors
+            pass
 
-        # Redirect to cart with success flag and order reference (escaped)
-        order_ref = getattr(order, 'name', None) or ''
+        # attach a message on the new quotation
+        new_order.sudo().message_post(body=f"Quotation requested by {partner.name} ({partner.email})")
+
+        # Empty the customer's current cart: remove lines from the session order
+        # so the UI and session reflect an empty cart after redirect.
+        try:
+            if current_order:
+                # remove all order lines from the current cart
+                try:
+                    current_order.order_line.sudo().unlink()
+                except Exception:
+                    # best-effort: if unlink fails, attempt to reset session
+                    pass
+            # clear session pointers so website_sale shows an empty cart
+            request.session['sale_order_id'] = None
+            request.session['website_sale_cart_quantity'] = 0
+        except Exception:
+            # ignore any session-clearing issues
+            pass
+
+        # Redirect to cart with success flag and new order reference (escaped)
+        order_ref = getattr(new_order, 'name', None) or ''
         try:
             order_ref_q = quote_plus(order_ref)
         except Exception:
@@ -153,6 +188,7 @@ class CustomWebsiteSale(WebsiteSale):
     @http.route(['/custom_checkout/remove_line'], type='http', auth='public', website=True)
     def remove_line(self, line_id=None, **kw):
         """Remove a sale.order.line from the current website cart if it belongs to it."""
+        print('Hello from remove_line:', line_id)
         try:
             line_id = int(line_id)
         except Exception:

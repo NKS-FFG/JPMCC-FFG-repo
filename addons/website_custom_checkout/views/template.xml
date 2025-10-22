@@ -8,26 +8,27 @@
                         <div class="container">
                             <h1 class="text-center mb-5">Enquiry Overview</h1>
                             
+                            <!-- Alerts for form submission feedback (moved out so messages show even when cart is cleared) -->
+                            <t t-if="request.params.get('quote_success')">
+                                <div class="alert alert-success" role="alert">
+                                    <t t-if="request.params.get('order_name')">
+                                        Your quote request has been received. Reference: <strong t-esc="request.params.get('order_name')"/>. Our team will contact you shortly.
+                                    </t>
+                                    <t t-else="">
+                                        Your quote request has been received. Our team will contact you shortly.
+                                    </t>
+                                </div>
+                            </t>
+                            <t t-if="request.params.get('quote_error')">
+                                <div class="alert alert-danger" role="alert">Please fill all required fields and try again.</div>
+                            </t>
+                            
                             <t t-if="website_sale_order and website_sale_order.website_order_line">
-                                <!-- Alerts for form submission feedback -->
-                                <t t-if="request.params.get('quote_success')">
-                                    <div class="alert alert-success" role="alert">
-                                        <t t-if="request.params.get('order_name')">
-                                            Your quote request has been received. Reference: <strong t-esc="request.params.get('order_name')"/>. Our team will contact you shortly.
-                                        </t>
-                                        <t t-else="">
-                                            Your quote request has been received. Our team will contact you shortly.
-                                        </t>
-                                    </div>
-                                </t>
-                                <t t-if="request.params.get('quote_error')">
-                                    <div class="alert alert-danger" role="alert">Please fill all required fields and try again.</div>
-                                </t>
                                 <div class="row">
                                     <div class="col-md-7">
                                         <div id="cart_products"
                                             t-if="website_sale_order and website_sale_order.website_order_line"
-                                            class="js_cart_lines d-flex flex-column mb32">
+                                            class="custom_js_cart_lines d-flex flex-column mb32">
                                     <t t-set="show_qty" t-value="is_view_active('website_sale.product_quantity')"/>
                                             <div t-foreach="website_sale_order.website_order_line"
                                         t-as="line"
@@ -67,11 +68,13 @@
                                                 </t>
                                                 <div name="o_wsale_cart_line_button_container">
                                                         <a t-attf-href="/custom_checkout/remove_line?line_id=#{line.id}"
-                                                            class="js_delete_product d-none d-md-inline-block small"
+                                                            class="custom_js_delete_product d-none d-md-inline-block small"
+                                                            t-att-data-line-id="line.id"
                                                             aria-label="Remove from cart"
                                                             title="Remove from cart">Remove</a>
                                                         <a t-attf-href="/custom_checkout/remove_line?line_id=#{line.id}"
-                                                                class="js_delete_product btn btn-light d-inline-block d-md-none"
+                                                                class="custom_js_delete_product btn btn-light d-inline-block d-md-none"
+                                                                t-att-data-line-id="line.id"
                                                                 title="remove">
                                                                 <i class="fa fa-trash-o"/>
                                                         </a>
@@ -239,6 +242,18 @@
                                                         sessionStorage.setItem('website_sale_cart_quantity', String(res.cart_quantity || 0));
                                                     }
                                                 }catch(e){/* ignore */}
+                                                // if cart is now empty, replace the cart+form row with the empty-cart message
+                                                try{
+                                                    if((res.cart_quantity || 0) === 0){
+                                                        var cartBlock = document.querySelector('#cart_products');
+                                                        if(cartBlock){
+                                                            var row = cartBlock.closest('.row');
+                                                            if(row){
+                                                                row.outerHTML = '<p class="text-center text-muted">Your cart is empty.</p>';
+                                                            }
+                                                        }
+                                                    }
+                                                }catch(e){/* ignore */}
                                                 // dispatch a custom event so other scripts (or themes) can react
                                                 try{
                                                     var evt = new CustomEvent('custom_cart:updated', {detail: {cart_quantity: res.cart_quantity || 0}});
@@ -272,6 +287,65 @@
                                                 var payload = {line_id: lineId, quantity: delta};
                                                 console.debug('update_line_qty payload', payload);
                                                 ajaxUpdate(lineId, delta, btn);
+                                            }
+                                            // handle clicks on delete links/buttons (.custom_js_delete_product)
+                                            var del = el.closest && el.closest('.custom_js_delete_product');
+                                            if(del){
+                                                ev.preventDefault();
+                                                if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+                                                var lineIdRaw = (del.dataset && del.dataset.lineId) || del.getAttribute('data-line-id') || del.getAttribute('t-att-data-line-id');
+                                                var lineId = parseInt(lineIdRaw, 10);
+                                                if(isNaN(lineId)){
+                                                    console.error('invalid line id on delete', lineIdRaw, del);
+                                                    return;
+                                                }
+                                                // send set_qty=0 to remove the line server-side
+                                                fetch('/custom_checkout/update_line_qty', {
+                                                    method: 'POST',
+                                                    headers: {'Content-Type': 'application/json','Accept': 'application/json'},
+                                                    body: JSON.stringify({line_id: lineId, set_qty: 0}),
+                                                    credentials: 'same-origin'
+                                                }).then(function(r){ return r.json(); }).then(function(res){
+                                                    var data = res.result || res;
+                                                    if(!data || !data.success){
+                                                        console.warn('remove line failed', data);
+                                                        return;
+                                                    }
+                                                    // remove DOM line if exists
+                                                    try{
+                                                        var inputs = document.querySelectorAll('input.custom_js_quantity[data-line-id="'+lineId+'"]');
+                                                        if(inputs && inputs.length){
+                                                            var input = inputs[0];
+                                                            var lineEl = input.closest('.o_cart_product');
+                                                            if(lineEl) lineEl.remove();
+                                                        }
+                                                        // update badge(s)
+                                                        var badgeSelectors = ['.my_cart_quantity', '[data-cart-quantity]'];
+                                                        badgeSelectors.forEach(function(sel){
+                                                            var els = document.querySelectorAll(sel);
+                                                            els.forEach(function(el){
+                                                                el.textContent = data.cart_quantity || 0;
+                                                                if(el.classList && el.classList.contains('d-none')){
+                                                                    el.classList.toggle('d-none', (data.cart_quantity || 0) === 0);
+                                                                }
+                                                            });
+                                                        });
+                                                        // if cart empty after removal, replace the cart+form area with empty message
+                                                        try{
+                                                            if((data.cart_quantity || 0) === 0){
+                                                                var cartBlock = document.querySelector('#cart_products');
+                                                                if(cartBlock){
+                                                                    var row = cartBlock.closest('.row');
+                                                                    if(row){
+                                                                        row.outerHTML = '<p class="text-center text-muted">Your cart is empty.</p>';
+                                                                    }
+                                                                }
+                                                            }
+                                                        }catch(e){/* ignore */}
+                                                        try{ if(window.sessionStorage){ sessionStorage.setItem('website_sale_cart_quantity', String(data.cart_quantity || 0)); } }catch(e){}
+                                                        try{ var evt = new CustomEvent('custom_cart:updated', {detail: {cart_quantity: data.cart_quantity || 0}}); document.dispatchEvent(evt); if(window.jQuery){ jQuery(document).trigger('custom_cart:updated', [data.cart_quantity || 0]); } }catch(e){}
+                                                    }catch(e){ console.error('remove handler error', e); }
+                                                }).catch(function(e){ console.error('remove ajax error', e); });
                                             }
                                         }, true);
                                         // Listen for direct quantity edits and send absolute updates (debounced)
@@ -331,6 +405,18 @@
                                                         if(window.sessionStorage){
                                                             sessionStorage.setItem('website_sale_cart_quantity', String(data.cart_quantity || 0));
                                                         }
+                                                        // if cart empty after set_qty, replace the cart+form area with empty message
+                                                        try{
+                                                            if((data.cart_quantity || 0) === 0){
+                                                                var cartBlock2 = document.querySelector('#cart_products');
+                                                                if(cartBlock2){
+                                                                    var row2 = cartBlock2.closest('.row');
+                                                                    if(row2){
+                                                                        row2.outerHTML = '<p class="text-center text-muted">Your cart is empty.</p>';
+                                                                    }
+                                                                }
+                                                            }
+                                                        }catch(e){/* ignore */}
                                                     }catch(err){
                                                         console.error('badge update error', err);
                                                     }
@@ -338,26 +424,6 @@
                                             }, 700);
                                         }, true);
                                     })();
-                                        // Ensure CSRF token is fresh before submitting the quote form
-                                        <!-- var quoteForm = document.querySelector('form[action="/custom_checkout/get_quote"]');
-                                        if(quoteForm){
-                                            quoteForm.addEventListener('submit', function(ev){
-                                                // synchronous prevention until token fetched
-                                                ev.preventDefault();
-                                                fetch('/custom_checkout/get_csrf', {method: 'POST', credentials: 'same-origin'}).then(function(r){return r.json();}).then(function(j){
-                                                    if(j && j.csrf_token){
-                                                        var inp = document.getElementById('custom_csrf_token');
-                                                        if(inp) inp.value = j.csrf_token;
-                                                    }
-                                                    // submit the form after token is updated
-                                                    quoteForm.submit();
-                                                }).catch(function(e){
-                                                    // fallback: submit anyway (server may reject)
-                                                    console.error('csrf fetch failed', e);
-                                                    quoteForm.submit();
-                                                });
-                                            }, false);
-                                        } -->
                                 ]]></script>
                             </t>
                             <t t-else="">
