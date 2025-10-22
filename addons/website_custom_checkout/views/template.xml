@@ -1,0 +1,439 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="custom_cart_with_products" name="My Shopping Cart">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_website_sale">
+                <div class="oe_structure">
+                    <section class="s_text_block pt40 pb40">
+                        <div class="container">
+                            <h1 class="text-center mb-5">Enquiry Overview</h1>
+                            
+                            <!-- Alerts for form submission feedback (moved out so messages show even when cart is cleared) -->
+                            <t t-if="request.params.get('quote_success')">
+                                <div class="alert alert-success" role="alert">
+                                    <t t-if="request.params.get('order_name')">
+                                        Your quote request has been received. Reference: <strong t-esc="request.params.get('order_name')"/>. Our team will contact you shortly.
+                                    </t>
+                                    <t t-else="">
+                                        Your quote request has been received. Our team will contact you shortly.
+                                    </t>
+                                </div>
+                            </t>
+                            <t t-if="request.params.get('quote_error')">
+                                <div class="alert alert-danger" role="alert">Please fill all required fields and try again.</div>
+                            </t>
+                            
+                            <t t-if="website_sale_order and website_sale_order.website_order_line">
+                                <div class="row">
+                                    <div class="col-md-7">
+                                        <div id="cart_products"
+                                            t-if="website_sale_order and website_sale_order.website_order_line"
+                                            class="custom_js_cart_lines d-flex flex-column mb32">
+                                    <t t-set="show_qty" t-value="is_view_active('website_sale.product_quantity')"/>
+                                            <div t-foreach="website_sale_order.website_order_line"
+                                        t-as="line"
+                                        t-attf-class="o_cart_product d-flex align-items-stretch gap-3 #{line.linked_line_id and 'optional_product info'} #{not line_last and 'border-bottom pb-4'} #{line_index &gt; 0 and 'pt-4'} oe_cart"
+                                        t-attf-data-product-id="#{line.product_id and line.product_id.id}"
+                                        t-att-data-line-id="line.id">
+                                        <t t-if="line.product_id">
+                                            <div style="width: 64px">
+                                                <!--
+                                                    Unsellable lines can have unpublished products, but portal users have no
+                                                    access to unpublished product images. To ensure product images are
+                                                    always shown for unsellable lines, we use the raw image data as src
+                                                    (which doesn't require access, unlike the image URL).
+                                                -->
+                                                <img
+                                                    t-if="line._is_not_sellable_line() and line.product_id.image_128"
+                                                    t-att-src="image_data_uri(line.product_id.image_128)"
+                                                    class="o_image_64_max img rounded"
+                                                    t-att-alt="line.name_short"
+                                                />
+                                                <div
+                                                    t-elif="line.product_id.image_128"
+                                                    t-field="line.product_id.image_128"
+                                                    t-options="{
+                                                        'widget': 'image',
+                                                        'qweb_img_responsive': False,
+                                                        'class': 'o_image_64_max rounded',
+                                                    }"
+                                                />
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <t t-call="website_sale.cart_line_product_link">
+                                                    <h6 t-field="line.name_short" class="d-inline align-top h6 fw-bold"/>
+                                                </t>
+                                                <t t-call="website_sale.cart_line_description_following_lines">
+                                                    <t t-set="div_class" t-value="''"/>
+                                                </t>
+                                                <div name="o_wsale_cart_line_button_container">
+                                                        <a t-attf-href="/custom_checkout/remove_line?line_id=#{line.id}"
+                                                            class="custom_js_delete_product d-none d-md-inline-block small"
+                                                            t-att-data-line-id="line.id"
+                                                            aria-label="Remove from cart"
+                                                            title="Remove from cart">Remove</a>
+                                                        <a t-attf-href="/custom_checkout/remove_line?line_id=#{line.id}"
+                                                                class="custom_js_delete_product btn btn-light d-inline-block d-md-none"
+                                                                t-att-data-line-id="line.id"
+                                                                title="remove">
+                                                                <i class="fa fa-trash-o"/>
+                                                        </a>
+                                                </div>
+                                                <t t-if="line.product_type == 'combo'">
+                                                    <div
+                                                        t-foreach="line.linked_line_ids"
+                                                        t-as="combo_item_line"
+                                                        t-attf-class="{{'' if combo_item_line_last else 'pb-2'}}"
+                                                    >
+                                                        <t t-call="website_sale.cart_combo_item_line"/>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                            <div class="d-flex flex-column align-items-end">
+                                            <div t-attf-class="css_quantity input-group mb-2"
+                                                    name="website_sale_cart_line_quantity">
+                                                    <t t-if="not line._is_not_sellable_line()">
+                                                            <t t-if="show_qty">
+                                                                    <a href="#"
+                                                                        class="btn btn-link custom_js_add_cart"
+                                                                        aria-label="Remove one"
+                                                                        title="Remove one"
+                                                                        t-att-data-line-id="line.id"
+                                                                        t-att-data-product-id="line.product_id.id"
+                                                                        t-att-data-quantity="-1">
+                                                                            <i class="position-relative z-1 fa fa-minus"/>
+                                                                    </a>
+                                                                    <input type="number"
+                                                                                class="custom_js_quantity quantity form-control text-center"
+                                                                                step="1" min="1"
+                                                                                data-min="1"
+                                                                                t-att-data-line-id="line.id"
+                                                                                t-att-data-product-id="line.product_id.id"
+                                                                                t-att-value="line._get_displayed_quantity()"/>
+                                                                    <t t-if="line._get_shop_warning(clear=False)">
+                                                                            <a href="#" class="btn btn-link">
+                                                                            <i class='fa fa-warning text-warning'
+                                                                                t-att-title="line._get_shop_warning()"
+                                                                                role="img"
+                                                                                aria-label="Warning"/>
+                                                                            </a>
+                                                                    </t>
+                                                                    <a href="#"
+                                                                        class="btn btn-link custom_js_add_cart"
+                                                                        aria-label="Add one"
+                                                                        title="Add one"
+                                                                        t-att-data-line-id="line.id"
+                                                                        t-att-data-product-id="line.product_id.id"
+                                                                        t-att-data-quantity="1">
+                                                                            <i class="fa fa-plus position-relative z-1"/>
+                                                                    </a>
+                                                            </t>
+                                                            <t t-else="">
+                                                                    <input type="hidden"
+                                                                                class="custom_js_quantity form-control quantity"
+                                                                                t-att-data-line-id="line.id"
+                                                                                t-att-data-product-id="line.product_id.id"
+                                                                                t-att-value="line._get_displayed_quantity()"/>
+                                                            </t>
+                                                    </t>
+                                                    <t t-else="">
+                                                        <span class="w-100 text-muted" t-esc="int(line.product_uom_qty)"/>
+                                      <input type="hidden"
+                                          class="custom_js_quantity quantity form-control"
+                                          t-att-data-line-id="line.id"
+                                          t-att-data-product-id="line.product_id.id"
+                                          t-att-value="line._get_displayed_quantity()"/>
+                                                    </t>
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="card p-3">
+                                            <h5 class="mb-3">Your details</h5>
+                                            <!-- Customer details form: name, email, phone, country, state, city -->
+                                            <form class="row g-3" method="post" action="/custom_checkout/get_quote">
+                                                <t t-nocache="csrf_token">
+                                                    <input type="hidden" id="custom_csrf_token" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                </t>
+                                                <div class="col-12">
+                                                    <label for="cust_name" class="form-label">Full name</label>
+                                                    <input id="cust_name" name="name" type="text" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_email" class="form-label">Email</label>
+                                                    <input id="cust_email" name="email" type="email" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_phone" class="form-label">Phone</label>
+                                                    <input id="cust_phone" name="phone" type="tel" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_country" class="form-label">Country</label>
+                                                    <input id="cust_country" name="country" type="text" class="form-control" placeholder="Country name" required="required"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_state" class="form-label">State</label>
+                                                    <input id="cust_state" name="state" type="text" class="form-control" placeholder="State / Province"/>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label for="cust_city" class="form-label">City</label>
+                                                    <input id="cust_city" name="city" type="text" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-12 text-end">
+                                                    <button type="submit" class="btn btn-primary">Get Quote <i class="fa fa-chevron-right"/></button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Country/state are plain text inputs to allow manual entry -->
+                                <script type="text/javascript"><![CDATA[
+                                    (function(){
+                                        function ajaxUpdate(line_id, delta, button){
+                                            var payload = {line_id: line_id, quantity: delta};
+                                            fetch('/custom_checkout/update_line_qty', {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'Accept': 'application/json',
+                                                },
+                                                body: JSON.stringify(payload),
+                                                credentials: 'same-origin'
+                                            })
+                                            .then(function(resp){
+                                                return resp.json();
+                                            })
+                                            .then(function(data){
+                                                data = data.result
+                                                if(!data || !data.success){
+                                                    console.warn('update failed', data);
+                                                    return;
+                                                }
+                                                // find input by data-line-id (use custom class to avoid Odoo default handlers)
+                                                var inputs = document.querySelectorAll('input.custom_js_quantity[data-line-id="'+line_id+'"]');
+                                                if(inputs && inputs.length){
+                                                    var input = inputs[0];
+                                                    if(data.new_qty <= 0){
+                                                        // remove DOM element for the line
+                                                        var lineEl = input.closest('.o_cart_product');
+                                                        if(lineEl) lineEl.remove();
+                                                    } else {
+                                                        input.value = data.new_qty;
+                                                    }
+                                                }
+                                                res = data;
+                                                // update all matching cart quantity badge(s)
+                                                var badgeSelectors = ['.my_cart_quantity', '[data-cart-quantity]'];
+                                                badgeSelectors.forEach(function(sel){
+                                                    var els = document.querySelectorAll(sel);
+                                                    els.forEach(function(el){
+                                                        el.textContent = res.cart_quantity || 0;
+                                                        if(el.classList && el.classList.contains('d-none')){
+                                                            el.classList.toggle('d-none', (res.cart_quantity || 0) === 0);
+                                                        }
+                                                    });
+                                                });
+                                                // keep website_sale session storage in sync so other website JS sees the change
+                                                try{
+                                                    if(window.sessionStorage){
+                                                        sessionStorage.setItem('website_sale_cart_quantity', String(res.cart_quantity || 0));
+                                                    }
+                                                }catch(e){/* ignore */}
+                                                // if cart is now empty, replace the cart+form row with the empty-cart message
+                                                try{
+                                                    if((res.cart_quantity || 0) === 0){
+                                                        var cartBlock = document.querySelector('#cart_products');
+                                                        if(cartBlock){
+                                                            var row = cartBlock.closest('.row');
+                                                            if(row){
+                                                                row.outerHTML = '<p class="text-center text-muted">Your cart is empty.</p>';
+                                                            }
+                                                        }
+                                                    }
+                                                }catch(e){/* ignore */}
+                                                // dispatch a custom event so other scripts (or themes) can react
+                                                try{
+                                                    var evt = new CustomEvent('custom_cart:updated', {detail: {cart_quantity: res.cart_quantity || 0}});
+                                                    document.dispatchEvent(evt);
+                                                    if(window.jQuery){
+                                                        jQuery(document).trigger('custom_cart:updated', [res.cart_quantity || 0]);
+                                                    }
+                                                }catch(e){/* ignore */}
+                                            }).catch(function(err){
+                                                console.error('AJAX error', err);
+                                            });
+                                        }
+
+                                        document.addEventListener('click', function(ev){
+                                            var el = ev.target;
+                                            // handle clicks on the +/- buttons inside .custom_js_add_cart (custom controls)
+                                            var btn = el.closest && el.closest('.custom_js_add_cart');
+                                            if(btn){
+                                                        ev.preventDefault();
+                                                        // prevent other listeners (website default handlers) from running and redirecting
+                                                        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+                                                // prefer dataset where possible
+                                                var lineIdRaw = (btn.dataset && btn.dataset.lineId) || btn.getAttribute('data-line-id') || btn.getAttribute('t-att-data-line-id');
+                                                var deltaRaw = (btn.dataset && btn.dataset.quantity) || btn.getAttribute('data-quantity') || btn.getAttribute('t-att-data-quantity') || '0';
+                                                var lineId = parseInt(lineIdRaw, 10);
+                                                var delta = parseInt(deltaRaw, 10) || 0;
+                                                if(isNaN(lineId)){
+                                                    console.error('invalid line id on button', lineIdRaw, btn);
+                                                    return;
+                                                }
+                                                var payload = {line_id: lineId, quantity: delta};
+                                                console.debug('update_line_qty payload', payload);
+                                                ajaxUpdate(lineId, delta, btn);
+                                            }
+                                            // handle clicks on delete links/buttons (.custom_js_delete_product)
+                                            var del = el.closest && el.closest('.custom_js_delete_product');
+                                            if(del){
+                                                ev.preventDefault();
+                                                if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+                                                var lineIdRaw = (del.dataset && del.dataset.lineId) || del.getAttribute('data-line-id') || del.getAttribute('t-att-data-line-id');
+                                                var lineId = parseInt(lineIdRaw, 10);
+                                                if(isNaN(lineId)){
+                                                    console.error('invalid line id on delete', lineIdRaw, del);
+                                                    return;
+                                                }
+                                                // send set_qty=0 to remove the line server-side
+                                                fetch('/custom_checkout/update_line_qty', {
+                                                    method: 'POST',
+                                                    headers: {'Content-Type': 'application/json','Accept': 'application/json'},
+                                                    body: JSON.stringify({line_id: lineId, set_qty: 0}),
+                                                    credentials: 'same-origin'
+                                                }).then(function(r){ return r.json(); }).then(function(res){
+                                                    var data = res.result || res;
+                                                    if(!data || !data.success){
+                                                        console.warn('remove line failed', data);
+                                                        return;
+                                                    }
+                                                    // remove DOM line if exists
+                                                    try{
+                                                        var inputs = document.querySelectorAll('input.custom_js_quantity[data-line-id="'+lineId+'"]');
+                                                        if(inputs && inputs.length){
+                                                            var input = inputs[0];
+                                                            var lineEl = input.closest('.o_cart_product');
+                                                            if(lineEl) lineEl.remove();
+                                                        }
+                                                        // update badge(s)
+                                                        var badgeSelectors = ['.my_cart_quantity', '[data-cart-quantity]'];
+                                                        badgeSelectors.forEach(function(sel){
+                                                            var els = document.querySelectorAll(sel);
+                                                            els.forEach(function(el){
+                                                                el.textContent = data.cart_quantity || 0;
+                                                                if(el.classList && el.classList.contains('d-none')){
+                                                                    el.classList.toggle('d-none', (data.cart_quantity || 0) === 0);
+                                                                }
+                                                            });
+                                                        });
+                                                        // if cart empty after removal, replace the cart+form area with empty message
+                                                        try{
+                                                            if((data.cart_quantity || 0) === 0){
+                                                                var cartBlock = document.querySelector('#cart_products');
+                                                                if(cartBlock){
+                                                                    var row = cartBlock.closest('.row');
+                                                                    if(row){
+                                                                        row.outerHTML = '<p class="text-center text-muted">Your cart is empty.</p>';
+                                                                    }
+                                                                }
+                                                            }
+                                                        }catch(e){/* ignore */}
+                                                        try{ if(window.sessionStorage){ sessionStorage.setItem('website_sale_cart_quantity', String(data.cart_quantity || 0)); } }catch(e){}
+                                                        try{ var evt = new CustomEvent('custom_cart:updated', {detail: {cart_quantity: data.cart_quantity || 0}}); document.dispatchEvent(evt); if(window.jQuery){ jQuery(document).trigger('custom_cart:updated', [data.cart_quantity || 0]); } }catch(e){}
+                                                    }catch(e){ console.error('remove handler error', e); }
+                                                }).catch(function(e){ console.error('remove ajax error', e); });
+                                            }
+                                        }, true);
+                                        // Listen for direct quantity edits and send absolute updates (debounced)
+                                        var qtyTimers = {};
+                                        document.addEventListener('input', function(ev){
+                                            var input = ev.target;
+                                            // listen only to changes on our custom inputs to avoid Odoo default handlers
+                                            if(!input || !input.classList || !input.classList.contains('custom_js_quantity')) return;
+                                            ev.stopPropagation();
+                                            ev.stopImmediatePropagation();
+                                            ev.preventDefault();
+                                            var lineIdRaw = input.getAttribute('data-line-id') || input.getAttribute('t-att-data-line-id');
+                                            var lineId = parseInt(lineIdRaw, 10);
+                                            if(isNaN(lineId)) return;
+                                            var rawVal = input.value;
+                                            if(typeof rawVal === 'string') rawVal = rawVal.trim();
+                                            // If empty string, do not update the cart (user still typing)
+                                            if(rawVal === '' || rawVal === null || typeof rawVal === 'undefined'){
+                                                return;
+                                            }
+                                            var val = parseInt(rawVal, 10);
+                                            if(isNaN(val)){
+                                                console.error('invalid qty input', rawVal);
+                                                return;
+                                            }
+                                            // debounce
+                                            if(qtyTimers[lineId]) clearTimeout(qtyTimers[lineId]);
+                                            qtyTimers[lineId] = setTimeout(function(){
+                                                console.debug('update_line_qty set payload', {line_id: lineId, set_qty: val});
+                                                fetch('/custom_checkout/update_line_qty', {
+                                                    method: 'POST',
+                                                    headers: {'Content-Type': 'application/json','Accept': 'application/json'},
+                                                    body: JSON.stringify({line_id: lineId, set_qty: val}),
+                                                    credentials: 'same-origin'
+                                                }).then(function(r){return r.json();}).then(function(res){
+                                                    var data = res.result || res;
+                                                    if(!data || !data.success){
+                                                        console.warn('set_qty update failed', data);
+                                                        return;
+                                                    }
+                                                    if(data.new_qty <= 0){
+                                                        var lineEl = input.closest('.o_cart_product'); if(lineEl) lineEl.remove();
+                                                    } else {
+                                                        input.value = data.new_qty;
+                                                    }
+                                                    // update cart badge(s) to keep header in sync
+                                                    try{
+                                                        var badgeSelectors = ['.my_cart_quantity', '[data-cart-quantity]'];
+                                                        badgeSelectors.forEach(function(sel){
+                                                            var el = document.querySelector(sel);
+                                                            if(!el) return;
+                                                            el.textContent = data.cart_quantity || 0;
+                                                            if(el.classList && el.classList.contains('d-none')){
+                                                                el.classList.toggle('d-none', (data.cart_quantity || 0) === 0);
+                                                            }
+                                                        });
+                                                        if(window.sessionStorage){
+                                                            sessionStorage.setItem('website_sale_cart_quantity', String(data.cart_quantity || 0));
+                                                        }
+                                                        // if cart empty after set_qty, replace the cart+form area with empty message
+                                                        try{
+                                                            if((data.cart_quantity || 0) === 0){
+                                                                var cartBlock2 = document.querySelector('#cart_products');
+                                                                if(cartBlock2){
+                                                                    var row2 = cartBlock2.closest('.row');
+                                                                    if(row2){
+                                                                        row2.outerHTML = '<p class="text-center text-muted">Your cart is empty.</p>';
+                                                                    }
+                                                                }
+                                                            }
+                                                        }catch(e){/* ignore */}
+                                                    }catch(err){
+                                                        console.error('badge update error', err);
+                                                    }
+                                                }).catch(function(e){console.error(e);});
+                                            }, 700);
+                                        }, true);
+                                    })();
+                                ]]></script>
+                            </t>
+                            <t t-else="">
+                                <p class="text-center text-muted">Your cart is empty.</p>
+                            </t>
+                            
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </t>
+    </template> 
+</odoo>

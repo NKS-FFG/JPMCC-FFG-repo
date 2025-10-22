@@ -6,8 +6,16 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import psycopg2
 import os, platform
+import logging
 from collections import defaultdict
 from odoo.tools import config
+
+# Configure logging
+# NOTE: Do NOT call logging.basicConfig() inside Odoo modules — Odoo configures
+# logging centrally. Create a module logger and allow it to propagate so Odoo's
+# handlers pick up the messages.
+logger = logging.getLogger(__name__)
+logger.propagate = True
 
 # ==== CONFIGURATION ====
 
@@ -16,7 +24,7 @@ def get_default_data_dir():
     if system == "Darwin":  # macOS
         return os.path.expanduser("~/Library/Application Support/Odoo/")
     elif system == "Windows":
-        return os.path.join(os.environ.get("APPDATA", ""), "Odoo")
+        return os.path.join(os.environ.get("LOCALAPPDATA", ""), "openerp s.a", "Odoo")
     else:  # Linux and others
         return os.path.expanduser("~/.local/share/Odoo/")
     
@@ -26,6 +34,8 @@ DB_PASSWORD = ""
 DB_HOST = config.get('db_host')
 DB_PORT = config.get('db_port')
 DATA_DIR = get_default_data_dir()
+
+logger.info(f"Using DATA_DIR: {DATA_DIR}")
 
 # ==== Load Pre-trained Model ====
 model = models.resnet50(pretrained=True)
@@ -51,17 +61,17 @@ def safe_load_image(image_path):
     try:
         # Check if file exists and is readable
         if not os.path.exists(image_path):
-            print(f"File does not exist: {image_path}")
+            logger.warning(f"File does not exist: {image_path}")
             return None
             
         if not os.access(image_path, os.R_OK):
-            print(f"File is not readable: {image_path}")
+            logger.warning(f"File is not readable: {image_path}")
             return None
             
         # Check file size
         file_size = os.path.getsize(image_path)
         if file_size == 0:
-            print(f"File is empty: {image_path}")
+            logger.warning(f"File is empty: {image_path}")
             return None
             
         # Try to detect file type
@@ -69,7 +79,7 @@ def safe_load_image(image_path):
             with Image.open(image_path) as img:
                 img.verify()  # Verify the image is valid
         except Exception as verify_error:
-            print(f"Image verification failed for {image_path}: {str(verify_error)}")
+            logger.error(f"Image verification failed for {image_path}: {str(verify_error)}")
             return None
             
         # Now actually load the image
@@ -101,16 +111,16 @@ def safe_load_image(image_path):
         return image
     
     except FileNotFoundError:
-        print(f"File not found: {image_path}")
+        logger.error(f"File not found: {image_path}")
         return None
     except PermissionError:
-        print(f"Permission denied: {image_path}")
+        logger.error(f"Permission denied: {image_path}")
         return None
     except OSError as e:
-        print(f"OS error loading {image_path}: {str(e)}")
+        logger.error(f"OS error loading {image_path}: {str(e)}")
         return None
     except Exception as e:
-        print(f"Unexpected error loading image {image_path}: {str(e)}")
+        logger.error(f"Unexpected error loading image {image_path}: {str(e)}")
         return None
 
 # === Utility to extract feature vector ===
@@ -127,7 +137,7 @@ def extract_features(image_path):
         return features.reshape(1, -1)
     
     except Exception as e:
-        print(f"Error extracting features from {image_path}: {str(e)}")
+        logger.error(f"Error extracting features from {image_path}: {str(e)}")
         return None
 
 # === Batch feature extraction for multiple images ===
@@ -158,7 +168,7 @@ def extract_features_batch(image_paths, batch_size=8):
                     batch_images.append(image_tensor)
                     valid_paths.append(path)
                 except Exception as e:
-                    print(f"Error preprocessing {path}: {str(e)}")
+                    logger.error(f"Error preprocessing {path}: {str(e)}")
                     results[path] = None
             else:
                 results[path] = None
@@ -182,7 +192,7 @@ def extract_features_batch(image_paths, batch_size=8):
                         results[path] = batch_features[j:j+1]
                         
             except Exception as e:
-                print(f"Error processing batch: {str(e)}")
+                logger.error(f"Error processing batch: {str(e)}")
                 for path in valid_paths:
                     results[path] = None
     
@@ -223,77 +233,90 @@ def get_image_paths_from_db():
         cur.close()
         conn.close()
 
+        logger.info(f"Retrieved {len(rows)} rows from database")
+        
         result = []
         for row in rows:
             if len(row) >= 4 and row[3]:  # Check if store_fname exists and is not NULL
                 product_id, product_name, image_id, store_fname = row[0], row[1], row[2], row[3]
                 
+                file_path = os.path.join(DATA_DIR, 'filestore', DB_NAME, store_fname)
+                filename = product_name.get('en_US', str(product_name)) if isinstance(product_name, dict) else str(product_name)
+                
+                logger.debug(f"Processing product: ID={product_id}, Name={filename}, Image ID={image_id}")
+                
+                if not os.path.exists(file_path):
+                    logger.warning(f"Image file not found: {file_path}")
+                    continue
+                
                 result.append({
-                    "path": os.path.join(DATA_DIR, 'filestore', DB_NAME, store_fname),
-                    "filename": product_name.get('en_US', str(product_name)) if isinstance(product_name, dict) else str(product_name),
+                    "path": file_path,
+                    "filename": filename,
                     "id": image_id,
                     "product_id": product_id
                 })
+                
+        logger.info(f"Successfully processed {len(result)} valid image entries")
         return result
     
     except Exception as e:
-        print(f"Database error: {str(e)}")
+        logger.error(f"Database error: {str(e)}")
         return []
 
 # === Utility to inspect problematic files ===
 def inspect_file(file_path):
     """Inspect a file to understand why it might be failing."""
-    print(f"\n=== Inspecting file: {file_path} ===")
+    logger.info(f"\n=== Inspecting file: {file_path} ===")
     
     # Check basic file properties
     if not os.path.exists(file_path):
-        print("File does not exist")
+        logger.warning("File does not exist")
         return
     
     stat = os.stat(file_path)
-    print(f"File size: {stat.st_size} bytes")
-    print(f"File permissions: {oct(stat.st_mode)}")
+    logger.info(f"File size: {stat.st_size} bytes")
+    logger.info(f"File permissions: {oct(stat.st_mode)}")
     
     # Try to read first few bytes
     try:
         with open(file_path, 'rb') as f:
             header = f.read(20)
-            print(f"File header (first 20 bytes): {header}")
+            logger.info(f"File header (first 20 bytes): {header}")
             
             # Try to identify file type from header
             if header.startswith(b'\x89PNG'):
-                print("Detected: PNG image")
+                logger.info("Detected: PNG image")
             elif header.startswith(b'\xFF\xD8\xFF'):
-                print("Detected: JPEG image")
+                logger.info("Detected: JPEG image")
             elif header.startswith(b'GIF87a') or header.startswith(b'GIF89a'):
-                print("Detected: GIF image")
+                logger.info("Detected: GIF image")
             elif header.startswith(b'BM'):
-                print("Detected: BMP image")
+                logger.info("Detected: BMP image")
             elif header.startswith(b'RIFF') and b'WEBP' in header:
-                print("Detected: WebP image")
+                logger.info("Detected: WebP image")
             else:
-                print("Unknown file type")
+                logger.info("Unknown file type")
     except Exception as e:
-        print(f" Error reading file: {str(e)}")
+        logger.error(f" Error reading file: {str(e)}")
     
     # Try PIL Image.open
     try:
         with Image.open(file_path) as img:
-            print(f"PIL Image info:")
-            print(f"Format: {img.format}")
-            print(f"Mode: {img.mode}")
-            print(f"Size: {img.size}")
+            logger.info(f"PIL Image info:")
+            logger.info(f"Format: {img.format}")
+            logger.info(f"Mode: {img.mode}")
+            logger.info(f"Size: {img.size}")
             if hasattr(img, 'info'):
-                print(f"   Info: {img.info}")
+                logger.info(f"   Info: {img.info}")
     except Exception as e:
-        print(f"PIL failed to open: {str(e)}")
+        logger.error(f"PIL failed to open: {str(e)}")
 
 def find_top_matches_improved(reference_image_path, comparison_image_dicts, top_k=3):
     """Find top matching images based on feature similarity."""
     try:
         reference_features = extract_features(reference_image_path)
         if reference_features is None:
-            print(f"Could not extract features from reference image: {reference_image_path}")
+            logger.error(f"Could not extract features from reference image: {reference_image_path}")
             return []
             
         similarities = []
@@ -306,7 +329,7 @@ def find_top_matches_improved(reference_image_path, comparison_image_dicts, top_
             product_id = item.get("product_id")
             
             if not os.path.exists(path):
-                print(f"File does not exist: {path}")
+                logger.warning(f"File does not exist: {path}")
                 continue
 
             comp_features = extract_features(path)
@@ -325,23 +348,23 @@ def find_top_matches_improved(reference_image_path, comparison_image_dicts, top_
         # Sort by similarity descending
         top_matches = sorted(similarities, key=lambda x: x["similarity"], reverse=True)[:top_k]
         
-        print(f"\nFound {len(top_matches)} matches out of {len(comparison_image_dicts)} total files")
+        logger.info(f"\nFound {len(top_matches)} matches out of {len(comparison_image_dicts)} total files")
         if failed_files:
-            print(f"Failed to process {len(failed_files)} files")
+            logger.warning(f"Failed to process {len(failed_files)} files")
         
         # Inspect first few failed files for debugging
         if failed_files and len(failed_files) <= 3:
-            print("\n=== Inspecting failed files ===")
+            logger.info("\n=== Inspecting failed files ===")
             for failed_file in failed_files[:3]:  # Only inspect first 3 failed files
                 inspect_file(failed_file)
         
         for match in top_matches:
-            print(f"Match: {match['filename']}, Similarity: {match['similarity']:.4f}, ID: {match['id']}")
+            logger.info(f"Match: {match['filename']}, Similarity: {match['similarity']:.4f}, ID: {match['id']}")
             
         return top_matches
     
     except Exception as e:
-        print(f"Error in find_top_matches: {str(e)}")
+        logger.error(f"Error in find_top_matches: {str(e)}")
         return []
 
 # === Enhanced matching for multiple images with batch processing ===
@@ -359,7 +382,7 @@ def find_matches_batch_optimized(reference_image_paths, comparison_image_dicts, 
     """
     try:
         # Extract features for all reference images
-        print(f"Extracting features for {len(reference_image_paths)} reference images...")
+        logger.info(f"Extracting features for {len(reference_image_paths)} reference images...")
         reference_features_map = extract_features_batch(reference_image_paths)
         
         # Filter out failed reference images
@@ -367,14 +390,14 @@ def find_matches_batch_optimized(reference_image_paths, comparison_image_dicts, 
                           if features is not None]
         
         if not valid_references:
-            print("No valid reference images found")
+            logger.warning("No valid reference images found")
             return {}
         
-        print(f"Successfully extracted features for {len(valid_references)} reference images")
+        logger.info(f"Successfully extracted features for {len(valid_references)} reference images")
         
         # Extract features for comparison images (with caching for efficiency)
         comparison_paths = [item["path"] for item in comparison_image_dicts if os.path.exists(item["path"])]
-        print(f"Extracting features for {len(comparison_paths)} comparison images...")
+        logger.info(f"Extracting features for {len(comparison_paths)} comparison images...")
         comparison_features_map = extract_features_batch(comparison_paths, batch_size=16)
         
         # Build valid comparison data
@@ -387,13 +410,13 @@ def find_matches_batch_optimized(reference_image_paths, comparison_image_dicts, 
                     "features": comparison_features_map[path]
                 })
         
-        print(f"Successfully extracted features for {len(valid_comparisons)} comparison images")
+        logger.info(f"Successfully extracted features for {len(valid_comparisons)} comparison images")
         
         # Find matches for each reference image
         all_matches = {}
         
         for ref_path, ref_features in valid_references:
-            print(f"Finding matches for: {os.path.basename(ref_path)}")
+            logger.info(f"Finding matches for: {os.path.basename(ref_path)}")
             similarities = []
             
             for comp_item in valid_comparisons:
@@ -407,17 +430,17 @@ def find_matches_batch_optimized(reference_image_paths, comparison_image_dicts, 
                         "path": comp_item["path"]
                     })
                 except Exception as e:
-                    print(f"Error calculating similarity: {str(e)}")
+                    logger.error(f"Error calculating similarity: {str(e)}")
                     continue
             
             # Sort and get top matches
             top_matches = sorted(similarities, key=lambda x: x["similarity"], reverse=True)[:top_k_per_image]
             all_matches[ref_path] = top_matches
             
-            print(f"Found {len(top_matches)} matches for {os.path.basename(ref_path)}")
+            logger.info(f"Found {len(top_matches)} matches for {os.path.basename(ref_path)}")
         
         return all_matches
     
     except Exception as e:
-        print(f"Error in find_matches_batch_optimized: {str(e)}")
+        logger.error(f"Error in find_matches_batch_optimized: {str(e)}")
         return {}
