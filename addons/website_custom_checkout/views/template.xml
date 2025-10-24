@@ -171,16 +171,29 @@
                                                     <input id="cust_phone" name="phone" type="tel" class="form-control" required="required"/>
                                                 </div>
                                                 <div class="col-12">
-                                                    <label for="cust_country" class="form-label">Country</label>
-                                                    <input id="cust_country" name="country" type="text" class="form-control" placeholder="Country name" required="required"/>
+                                                    <label  class="form-label" for="cust_country">Country</label>
+                                                        <select name="cust_country" 
+                                                                class="form-control js_country" 
+                                                                id="cust_country" 
+                                                                required="1"> <option value="">Select Country...</option>
+                                                            <t t-foreach="countries" t-as="country">
+                                                                <option t-att-value="country.id">
+                                                                    <t t-esc="country.name"/>
+                                                                </option>
+                                                            </t>
+                                                        </select>                                                   
                                                 </div>
                                                 <div class="col-12">
                                                     <label for="cust_state" class="form-label">State</label>
                                                     <input id="cust_state" name="state" type="text" class="form-control" placeholder="State / Province"/>
                                                 </div>
-                                                <div class="col-12">
+                                                <div class="col-6">
                                                     <label for="cust_city" class="form-label">City</label>
                                                     <input id="cust_city" name="city" type="text" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="col-6">
+                                                    <label for="cust_pincode" class="form-label">Pincode</label>
+                                                    <input id="cust_pincode" name="pincode" type="text" class="form-control" required="required"/>
                                                 </div>
                                                 <div class="col-12 text-end">
                                                     <button type="submit" class="btn btn-primary">Get Quote <i class="fa fa-chevron-right"/></button>
@@ -189,6 +202,7 @@
                                         </div>
                                     </div>
                                 </div>
+                                <script type="text/javascript" src="/website/static/lib/country_state_management.js"/>
                                 <!-- Country/state are plain text inputs to allow manual entry -->
                                 <script type="text/javascript"><![CDATA[
                                     (function(){
