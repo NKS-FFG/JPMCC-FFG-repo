@@ -54,6 +54,9 @@ class CustomWebsiteSale(WebsiteSale):
             elif abandoned_order.id != request.session.get('sale_order_id'):  # abandoned cart found, user have to choose what to do
                 values.update({'access_token': abandoned_order.access_token})
 
+        countries = request.env['res.country'].sudo().search([])
+        values['countries'] = countries
+
         values.update({
             'website_sale_order': order,
             'date': fields.Date.today(),
@@ -64,7 +67,6 @@ class CustomWebsiteSale(WebsiteSale):
             values['suggested_products'] = order._cart_accessories()
             values.update(self._get_express_shop_payment_values(order))
 
-        print(order,' ',order.website_order_line)
         values.update(self._cart_values(**post))    
         return http.request.render("website_custom_checkout.custom_cart_with_products", values)
 
@@ -74,7 +76,7 @@ class CustomWebsiteSale(WebsiteSale):
         Handle customer details form submission, create/find partner and create/update a sale.order (quotation).
         """
         # Required fields (only these must be provided)
-        required = ['name', 'email', 'phone', 'country', 'city']
+        required = ['name', 'email', 'phone', 'cust_country', 'city', 'pincode']
         missing = [f for f in required if not post.get(f)]
         if missing:
             # simple feedback: redirect back with a query param (could be improved)
@@ -83,39 +85,39 @@ class CustomWebsiteSale(WebsiteSale):
         Partner = request.env['res.partner'].sudo()
         # Try to find existing partner by email, else create
         partner = None
-        if post.get('email'):
-            partner = Partner.search([('email', '=', post.get('email'))], limit=1)
-
+        
         if not partner:
             vals = {
                 'name': post.get('name'),
                 'email': post.get('email'),
                 'phone': post.get('phone'),
-                'country_id': None,
-                'state_id': None,
+                'country_id': post.get('cust_country'),
+                'state_id': post.get('state_id'),
                 'city': post.get('city'),
+                'zip': post.get('pincode'),
             }
             # prefer numeric ids (country_id/state_id) from select fields; otherwise fallback to name search
-            if post.get('country_id'):
-                try:
-                    vals['country_id'] = int(post.get('country_id'))
-                except Exception:
-                    vals['country_id'] = None
-            else:
-                country = request.env['res.country'].sudo().search([('name', 'ilike', post.get('country') or '')], limit=1)
-                if country:
-                    vals['country_id'] = country.id
+            # if post.get('country_id'):
+            #     try:
+            #         vals['country_id'] = int(post.get('country_id'))
+            #     except Exception:
+            #         vals['country_id'] = None
+            # else:
+            #     country = request.env['res.country'].sudo().search([('id', '=', post.get('cust_country') or '')], limit=1)
+            #     if country:
+            #         vals['country_id'] = country.id
+            # print('country id:', vals['country_id'])
+            # if post.get('state_id'):
+            #     try:
+            #         vals['state_id'] = int(post.get('state_id'))
+            #     except Exception:
+            #         vals['state_id'] = None
+            # else:
+            #     state = request.env['res.country.state'].sudo().search([('name', 'ilike', post.get('state') or '')], limit=1)
+            #     if state:
+            #         vals['state_id'] = state.id
 
-            if post.get('state_id'):
-                try:
-                    vals['state_id'] = int(post.get('state_id'))
-                except Exception:
-                    vals['state_id'] = None
-            else:
-                state = request.env['res.country.state'].sudo().search([('name', 'ilike', post.get('state') or '')], limit=1)
-                if state:
-                    vals['state_id'] = state.id
-
+            print('partner vals:', vals)
             partner = Partner.create(vals)
 
         # Build a new quotation (always create a new sale.order) and copy the
@@ -144,24 +146,25 @@ class CustomWebsiteSale(WebsiteSale):
                     except Exception:
                         # ignore problems copying a specific line
                         continue
+                
         except Exception:
             # ignore any non-fatal copy errors
             pass
 
         # attach a message on the new quotation
-        new_order.sudo().message_post(body=f"Quotation requested by {partner.name} ({partner.email})")
-
+        new_order.sudo().message_post(body=f"Order created - {partner.name} ({partner.email})")
+        new_order.action_confirm()
         # Empty the customer's current cart: remove lines from the session order
         # so the UI and session reflect an empty cart after redirect.
         try:
             if current_order:
-                # remove all order lines from the current cart
                 try:
-                    current_order.order_line.sudo().unlink()
-                except Exception:
-                    # best-effort: if unlink fails, attempt to reset session
-                    pass
-            # clear session pointers so website_sale shows an empty cart
+                    if current_order.state not in ['draft', 'cancel']:
+                        current_order.sudo().action_cancel()
+                        current_order.sudo().write({'state': 'cancel'})
+                    current_order.sudo().unlink()
+                except Exception as e:
+                    print(f"Failed to delete old cart: {e}")
             request.session['sale_order_id'] = None
             request.session['website_sale_cart_quantity'] = 0
         except Exception:
